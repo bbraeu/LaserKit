@@ -24,7 +24,11 @@ maintained by [bbraeu](https://github.com/bbraeu).
 | --- | --- | --- |
 | **DXF** (default) | colour-coded (ACI) | AutoCAD R2000, single layer, read by LightBurn / Fusion / any CAM tool |
 | **FDS** | natively assigned layers | Falcon Design Space project — engrave & cut modes pre-assigned on import |
-| **SVG** | colour-coded strokes/fills | Exactly what the preview shows |
+| **SVG** | colour-coded strokes/fills | Exactly what the preview shows — the only output that carries raster images |
+
+Raster images (`BITMAP` displays) are embedded in the SVG output at their placed
+size. DXF and FDS are vector-only, so an image is exported as its outline box;
+the converter says so when a canvas contains one.
 
 ## How it works
 
@@ -34,10 +38,13 @@ maintained by [bbraeu](https://github.com/bbraeu).
 - `.xs` files (xTool Studio) are ZIP archives with the same model split into
   parts: `canvases/<id>/displays-<n>.json` (geometry, chunked),
   `vectors/<bucket>/data-<n>.json` (deduplicated `dPath` strings referenced via
-  `vectorRef`), `profiles.json` (profile → `processingType`) and
+  `vectorRef`), `resources/<hash>.<ext>` (raster images referenced via
+  `resourcePath`, where v1 embedded a base64 data URL inline),
+  `profiles.json` (profile → `processingType`) and
   `devices/device-<id>.json` (bindings: profile → display ids).
-  `src/lib/xs.ts` reassembles them into the `.xcs` shape, so the rest of the
-  pipeline is shared.
+  `src/lib/xs.ts` reassembles them into the `.xcs` shape — inlining vectors and
+  re-encoding referenced rasters as data URLs — so the rest of the pipeline is
+  shared.
 - Shapes are rendered into an off-screen SVG (reusing the preview builders),
   positioned via the browser's `getCTM()`, and bezier curves are adaptively
   flattened to polylines at 0.01 mm.

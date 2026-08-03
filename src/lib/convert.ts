@@ -34,7 +34,10 @@ export interface XcsDisplay {
     charJSONs?: XcsDisplay[];
     style?: { fontFamily?: string; fontSize?: number };
     text?: string;
+    /** BITMAP raster as a data URL (v1 stores it inline; xs.ts fills it in for v2) */
     base64?: string;
+    /** BITMAP raster location inside a .xs archive — resolved to base64 by xs.ts */
+    resourcePath?: string;
 }
 
 export interface XcsCanvas {
@@ -202,8 +205,13 @@ const builders: Record<string, ShapeBuilder> = {
 
         return `<path ${getId(o)}d="${a.join(" ")}" ${getFill(o, sColor)} transform="${getTransform(o, false)}" stroke-width="${STROKE_WIDTH}"/>`;
     },
+    // width/height are already the placed size in mm (originWidth * scale), so the
+    // raster is stretched to that box — preserveAspectRatio="none" keeps it filling
+    // the box even when the user scaled it non-uniformly. Omit href when the raster
+    // is missing so the box still contributes geometry instead of a broken image.
     BITMAP: o => {
-        return `<image ${getId(o)}href="${o.base64}" x="${o.x}" y="${o.y}" height="${o.width}" width="${o.height}" transform="${getTransform(o, false, true, false)}" />`;
+        const sHref = o.base64 ? `href="${o.base64}" ` : "";
+        return `<image ${getId(o)}${sHref}x="${o.x}" y="${o.y}" width="${o.width}" height="${o.height}" preserveAspectRatio="none" transform="${getTransform(o, false, true, false)}" />`;
     }
 };
 

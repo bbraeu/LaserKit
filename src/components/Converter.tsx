@@ -35,6 +35,8 @@ interface CanvasResult {
     fds: Blob;
     baseName: string;
     operations: Operation[];
+    /** raster images on this canvas — only SVG can carry them (see note below) */
+    rasters: number;
 }
 
 interface ConversionState {
@@ -100,7 +102,8 @@ export default function Converter() {
                     dxf: oDxf.aCanvas[i]!.dxf,
                     fds: oFds.aCanvas[i]!.fds,
                     baseName: file.name.replace(/\.(xcs|xs)$/i, ""),
-                    operations: getUsedOperations(oJSON, oJSON.canvas[i]!)
+                    operations: getUsedOperations(oJSON, oJSON.canvas[i]!),
+                    rasters: oJSON.canvas[i]!.displays.filter(d => d.type === "BITMAP").length
                 }))
             });
             setTab(0);
@@ -426,6 +429,14 @@ export default function Converter() {
                                     scroll to zoom · drag to pan · double-click to reset
                                 </p>
                             </div>
+
+                            {active.rasters > 0 && (
+                                <p className="mt-3 text-xs text-amber-300/80">
+                                    {active.rasters === 1 ? "Contains 1 image" : `Contains ${active.rasters} images`} —
+                                    DXF and FDS are vector-only formats, so an image is exported as its outline box.
+                                    Download SVG to keep the picture itself.
+                                </p>
+                            )}
 
                             {state.excluded.length > 0 && (
                                 <p className="mt-3 text-xs text-amber-300/80">

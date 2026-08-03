@@ -11,6 +11,8 @@ import type { XcsProject, XcsCanvas, XcsDisplay } from "./convert";
 //   canvases/<id>/displays-<n>.json       display objects, chunked
 //   vectors/<bucket>/data-<n>.json        deduplicated geometry (e.g. dPath
 //                                         strings) referenced via vectorRef
+//   resources/<hash>.<ext>                raster images, referenced by a
+//                                         display's resourcePath
 //   profiles.json                         profileId -> processingType
 //   devices/device-<id>.json              processing[canvasId].modes[mode]
 //                                         .bindings: profile -> displayIds
@@ -78,11 +80,56 @@ const loadVectorBuckets = (files: Record<string, Uint8Array>): Map<string, Recor
     return buckets;
 };
 
+const IMAGE_MIME: Record<string, string> = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    gif: "image/gif",
+    bmp: "image/bmp",
+    svg: "image/svg+xml"
+};
+
+// btoa() needs a binary string; build it in chunks because spreading a whole
+// multi-megabyte raster into String.fromCharCode overflows the argument limit.
+const toBase64 = (data: Uint8Array): string => {
+    const CHUNK = 0x8000,
+        aParts: string[] = [];
+    for (let i = 0; i < data.length; i += CHUNK) {
+        aParts.push(String.fromCharCode(...data.subarray(i, i + CHUNK)));
+    }
+    return btoa(aParts.join(""));
+};
+
+// v1 .xcs embeds a BITMAP's raster inline as a base64 data URL; v2 extracts it
+// to resources/<hash>.<ext> and leaves only a resourcePath on the display.
+// Encode on demand and cache, so an unreferenced resource (e.g. the project
+// cover thumbnail) or an image reused by several displays is never re-encoded.
+const makeResourceLoader = (files: Record<string, Uint8Array>): (path: string) => string | undefined => {
+    const cache = new Map<string, string | undefined>();
+    return (sPath: string): string | undefined => {
+        const sKey = sPath.replace(/^\.?\//, "");
+        if (cache.has(sKey)) return cache.get(sKey);
+
+        const data = files[sKey],
+            sExt = sKey.split(".").pop()?.toLowerCase() ?? "",
+            sUrl = data ? `data:${IMAGE_MIME[sExt] ?? "image/png"};base64,${toBase64(data)}` : undefined;
+
+        cache.set(sKey, sUrl);
+        return sUrl;
+    };
+};
+
 // v2 deduplicates heavy fields (like a PATH's dPath) into the vectors store;
 // the display carries { vectorRef: { vectorHash, bucketType, originalField } }
-// instead. Inline the referenced value back onto the display (and its nested
-// TEXT charJSONs) so the v1 builders see the field where they expect it.
-const inlineVectorRefs = (oDisplay: XcsDisplay, buckets: Map<string, Record<string, unknown>>): void => {
+// instead. Inline the referenced value — and any raster referenced by
+// resourcePath — back onto the display (and its nested TEXT charJSONs) so the
+// v1 builders see every field where they expect it.
+const hydrateDisplay = (
+    oDisplay: XcsDisplay,
+    buckets: Map<string, Record<string, unknown>>,
+    fnResource: (path: string) => string | undefined
+): void => {
     const ref = (oDisplay as unknown as { vectorRef?: XsVectorRef }).vectorRef;
     if (ref?.vectorHash && ref.originalField) {
         const value = buckets.get(ref.bucketType)?.[ref.vectorHash];
@@ -90,13 +137,20 @@ const inlineVectorRefs = (oDisplay: XcsDisplay, buckets: Map<string, Record<stri
             (oDisplay as unknown as Record<string, unknown>)[ref.originalField] = value;
         }
     }
-    oDisplay.charJSONs?.forEach(c => inlineVectorRefs(c, buckets));
+
+    if (!oDisplay.base64 && oDisplay.resourcePath) {
+        const sUrl = fnResource(oDisplay.resourcePath);
+        if (sUrl) oDisplay.base64 = sUrl;
+    }
+
+    oDisplay.charJSONs?.forEach(c => hydrateDisplay(c, buckets, fnResource));
 };
 
 const loadCanvas = (
     files: Record<string, Uint8Array>,
     sCanvasId: string,
-    buckets: Map<string, Record<string, unknown>>
+    buckets: Map<string, Record<string, unknown>>,
+    fnResource: (path: string) => string | undefined
 ): XcsCanvas | undefined => {
     const oMeta = readJson<XsCanvasJson>(files, `canvases/${sCanvasId}.json`);
     if (!oMeta) return undefined;
@@ -107,7 +161,7 @@ const loadCanvas = (
     aChunks.forEach(iChunk => {
         const oChunk = readJson<{ displays?: XcsDisplay[] }>(files, `canvases/${sCanvasId}/displays-${iChunk}.json`);
         oChunk?.displays?.forEach(oDisplay => {
-            inlineVectorRefs(oDisplay, buckets);
+            hydrateDisplay(oDisplay, buckets, fnResource);
             aDisplays.push(oDisplay);
         });
     });
@@ -160,8 +214,9 @@ export const parseXs = (buf: ArrayBuffer): XcsProject => {
     }
 
     const buckets = loadVectorBuckets(files),
+        fnResource = makeResourceLoader(files),
         aCanvas = oProject.modules.canvases
-            .map(sId => loadCanvas(files, sId, buckets))
+            .map(sId => loadCanvas(files, sId, buckets, fnResource))
             .filter((c): c is XcsCanvas => !!c);
 
     if (!aCanvas.length) {
