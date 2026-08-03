@@ -27,8 +27,10 @@ maintained by [bbraeu](https://github.com/bbraeu).
 | **SVG** | colour-coded strokes/fills | Exactly what the preview shows — the only output that carries raster images |
 
 Raster images (`BITMAP` displays) are embedded in the SVG output at their placed
-size. DXF and FDS are vector-only, so an image is exported as its outline box;
-the converter says so when a canvas contains one.
+size. DXF and FDS can only store vector geometry — DXF's only raster entity is a
+reference to an external file, and an `.fds` shape is a QPainterPath outline — so
+for a canvas containing an image those two formats are not offered at all,
+rather than handing out a file with the picture silently missing.
 
 ## How it works
 

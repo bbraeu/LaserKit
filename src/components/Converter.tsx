@@ -63,6 +63,16 @@ const blobFor = (oCanvas: CanvasResult, fmt: FormatKey): Blob => {
     }
 };
 
+// Of the three outputs only SVG can hold a raster image: DXF's only raster
+// entity is a reference to an external file, and an .fds shape is a
+// QPainterPath outline. So a canvas containing an image is offered as SVG only,
+// rather than handing out a DXF/FDS with the picture silently missing.
+const carriesRaster = (fmt: FormatKey): boolean => fmt === "svg";
+
+/** The format to actually export in — falls back to SVG when rasters are involved. */
+const usableFormat = (fmt: FormatKey, bHasRaster: boolean): FormatKey =>
+    bHasRaster && !carriesRaster(fmt) ? "svg" : fmt;
+
 export default function Converter() {
     const [state, setState] = useState<ConversionState | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -149,6 +159,17 @@ export default function Converter() {
         };
     }, [menuOpen]);
 
+    const active = state?.canvases[tab];
+
+    // Restrict the offered formats per canvas: only the canvas being previewed
+    // decides, so a vector-only canvas in the same project still exports as DXF.
+    const activeHasRaster = (active?.rasters ?? 0) > 0,
+        activeFormat = usableFormat(format, activeHasRaster),
+        // One zip carries every canvas in a single format, so any image in the
+        // project restricts the whole archive.
+        anyRaster = state?.canvases.some(c => c.rasters > 0) ?? false,
+        zipFormat = usableFormat(format, anyRaster);
+
     const downloadOne = (oCanvas: CanvasResult, fmt: FormatKey) => {
         downloadBlob(blobFor(oCanvas, fmt), fileNameFor(oCanvas, fmt));
         // Event names as configured in Google Analytics: DXF_Download, FDS_Download, SVG_Download
@@ -158,13 +179,12 @@ export default function Converter() {
     const downloadAll = () => {
         if (!state) return;
         void downloadAsZip(
-            state.canvases.map(c => ({ blob: blobFor(c, format), file: fileNameFor(c, format) })),
+            state.canvases.map(c => ({ blob: blobFor(c, zipFormat), file: fileNameFor(c, zipFormat) })),
             state.sourceName.replace(/\.(xcs|xs)$/i, "") + ".zip"
         );
         trackEvent("download_zip");
     };
 
-    const active = state?.canvases[tab];
     const previewRef = useRef<HTMLDivElement>(null);
     const vbRef = useRef<ViewBox | null>(null);   // current viewBox
     const fitRef = useRef<ViewBox | null>(null);  // fit-to-content viewBox
@@ -327,7 +347,7 @@ export default function Converter() {
                                 onClick={downloadAll}
                                 className="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-cyan-400/50 hover:text-white"
                             >
-                                Download all as .zip
+                                Download all as .zip ({FORMATS[zipFormat].label})
                             </button>
                         )}
                     </div>
@@ -368,10 +388,10 @@ export default function Converter() {
                                 <div ref={menuRef} className="relative">
                                     <div className="flex shadow-lg shadow-violet-500/25">
                                         <button
-                                            onClick={() => downloadOne(active, format)}
+                                            onClick={() => downloadOne(active, activeFormat)}
                                             className="rounded-l-lg bg-linear-to-r from-cyan-500 to-violet-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 active:scale-95"
                                         >
-                                            Download {fileNameFor(active, format)}
+                                            Download {fileNameFor(active, activeFormat)}
                                         </button>
                                         <button
                                             aria-label="Choose download format"
@@ -388,23 +408,36 @@ export default function Converter() {
 
                                     {menuOpen && (
                                         <div role="menu" className="absolute top-full right-0 z-30 mt-2 w-80 rounded-xl bg-slate-900/95 p-1.5 ring-1 ring-white/15 backdrop-blur-xl">
-                                            {(Object.keys(FORMATS) as FormatKey[]).map(key => (
-                                                <button
-                                                    key={key}
-                                                    role="menuitem"
-                                                    onClick={() => { setFormat(key); setMenuOpen(false); downloadOne(active, key); }}
-                                                    className="flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-white/10"
-                                                >
-                                                    <span className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-xs ${key === format ? "bg-cyan-400 text-slate-900" : "bg-white/10 text-transparent"}`}>✓</span>
-                                                    <span>
-                                                        <span className="flex items-center gap-2 text-sm font-semibold text-white">
-                                                            {FORMATS[key].label}
-                                                            <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-slate-300">{FORMATS[key].note}</span>
+                                            {(Object.keys(FORMATS) as FormatKey[]).map(key => {
+                                                // Unavailable for this canvas: it holds an image the format cannot carry.
+                                                const bBlocked = activeHasRaster && !carriesRaster(key);
+                                                return (
+                                                    <button
+                                                        key={key}
+                                                        role="menuitem"
+                                                        disabled={bBlocked}
+                                                        aria-disabled={bBlocked}
+                                                        title={bBlocked ? "This canvas contains an image, which this format cannot store" : undefined}
+                                                        onClick={() => { setFormat(key); setMenuOpen(false); downloadOne(active, key); }}
+                                                        className={`flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition ${bBlocked ? "cursor-not-allowed opacity-40" : "hover:bg-white/10"}`}
+                                                    >
+                                                        <span className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-xs ${key === activeFormat ? "bg-cyan-400 text-slate-900" : "bg-white/10 text-transparent"}`}>✓</span>
+                                                        <span>
+                                                            <span className="flex items-center gap-2 text-sm font-semibold text-white">
+                                                                {FORMATS[key].label}
+                                                                <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-slate-300">
+                                                                    {bBlocked ? "no image support" : FORMATS[key].note}
+                                                                </span>
+                                                            </span>
+                                                            <span className="mt-0.5 block text-xs leading-snug text-slate-400">
+                                                                {bBlocked
+                                                                    ? "Cannot store the image on this canvas — vector geometry only"
+                                                                    : FORMATS[key].desc}
+                                                            </span>
                                                         </span>
-                                                        <span className="mt-0.5 block text-xs leading-snug text-slate-400">{FORMATS[key].desc}</span>
-                                                    </span>
-                                                </button>
-                                            ))}
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </div>
@@ -432,9 +465,9 @@ export default function Converter() {
 
                             {active.rasters > 0 && (
                                 <p className="mt-3 text-xs text-amber-300/80">
-                                    {active.rasters === 1 ? "Contains 1 image" : `Contains ${active.rasters} images`} —
-                                    DXF and FDS are vector-only formats, so an image is exported as its outline box.
-                                    Download SVG to keep the picture itself.
+                                    {active.rasters === 1 ? "This canvas contains an image" : `This canvas contains ${active.rasters} images`}.
+                                    DXF and FDS can only store vector geometry, so they are unavailable here — SVG is the
+                                    only export that keeps the image.
                                 </p>
                             )}
 
