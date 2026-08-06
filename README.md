@@ -1,12 +1,15 @@
 # LaserKit
 
-**Live: [bbraeu.github.io/XToolConverter](https://bbraeu.github.io/XToolConverter/)**
+**Live: [bbraeu.github.io/LaserKit](https://bbraeu.github.io/LaserKit/)**
 
 Free, in-browser tools for laser cutting and engraving. Files never leave your
 computer — every tool parses, computes and writes entirely in the browser.
 
-Grew out of XToolConverter, which is now the first of the tools; the repository
-and the URL keep that name so existing links and the Pages deploy stay put.
+Grew out of XToolConverter, which is now the converter tool inside the kit. The
+repository was renamed with it, so the site moved from
+`bbraeu.github.io/XToolConverter/` to `bbraeu.github.io/LaserKit/` — GitHub
+redirects the repository URL, but not the Pages one, so old links to the site
+itself no longer resolve.
 
 Successor of [XCStoDXF](https://github.com/bbraeu/XCStoDXF), based on
 [XCStoSVG by Daniel Nanovski](https://nanovsky.github.io/XCStoSVG/) —
