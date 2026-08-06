@@ -1,7 +1,7 @@
 {
-  "name": "xtoolconverter",
+  "name": "laserkit",
   "private": true,
-  "version": "1.4.0",
+  "version": "2.1.0",
   "type": "module",
   "scripts": {
     "dev": "astro dev",
@@ -15,7 +15,8 @@
     "client-zip": "^2.5.0",
     "fflate": "^0.8.3",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7"
+    "react-dom": "^19.2.7",
+    "skeleton-tracing-js": "^1.0.4"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.9",

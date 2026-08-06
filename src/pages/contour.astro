@@ -1,0 +1,44 @@
+---
+import ToolPage from "../components/ToolPage.astro";
+import Outliner from "../components/Outliner";
+---
+
+<ToolPage tool="contour">
+    <Fragment slot="lead">
+        Trace the <strong class="text-slate-300">cut line around a design</strong> — for the backing plate you
+        glue the original on top of. The geometry comes from the very same extraction the DXF export uses, so
+        the outline is traced around exactly what would be cut.
+    </Fragment>
+
+    <Outliner client:load />
+
+    <section slot="notes" class="relative px-4 pb-24">
+        <div class="mx-auto grid w-[min(72rem,100%)] gap-5 lg:grid-cols-3">
+            <article class="glass reveal rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">Items, not shapes</h2>
+                <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                    Every subpath is treated as a ring, and a ring is an <strong class="text-slate-300">item</strong> when no other ring contains it. Holes and inner detail therefore drop out by themselves, and
+                    things standing side by side come out as separate items — trace all of them, or switch to <em>individual</em> and click the ones you want.
+                </p>
+            </article>
+            <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 110ms">
+                <h2 class="text-lg font-semibold text-white">Border 0 mm is exact</h2>
+                <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                    At zero the item's outermost path <em>is</em> the cut line, to the 0.01 mm the curve flattener
+                    works at. Give it a border and the offset is computed on a fine grid instead — the accuracy it
+                    reports, typically 0.03 mm — because offsetting a polygon outwards means resolving the
+                    self-intersections it creates at every concave corner.
+                </p>
+            </article>
+            <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 220ms">
+                <h2 class="text-lg font-semibold text-white">Three ways to join</h2>
+                <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                    <strong class="text-slate-300">Shrink-wrap</strong> closes the mask with the reach the gaps
+                    need, so one smooth outline sweeps from item to item and hugs each. <strong class="text-slate-300">Bridges</strong> adds a 4 mm neck along the shortest route,
+                    filleted where it meets an item. <strong class="text-slate-300">Taut band</strong> is the
+                    convex hull. The automatic reach opens up until the selection really is one piece.
+                </p>
+            </article>
+        </div>
+    </section>
+</ToolPage>

@@ -1,15 +1,36 @@
-# XToolConverter
+# LaserKit
 
 **Live: [bbraeu.github.io/XToolConverter](https://bbraeu.github.io/XToolConverter/)**
 
-Free, in-browser converter for xTool project files — both xTool Creative Space
-`.xcs` and xTool Studio `.xs` — with the laser operation types (surface
-engraving, line engraving, line cutting) preserved. Files never leave your
-computer.
+Free, in-browser tools for laser cutting and engraving. Files never leave your
+computer — every tool parses, computes and writes entirely in the browser.
+
+Grew out of XToolConverter, which is now the first of the tools; the repository
+and the URL keep that name so existing links and the Pages deploy stay put.
 
 Successor of [XCStoDXF](https://github.com/bbraeu/XCStoDXF), based on
 [XCStoSVG by Daniel Nanovski](https://nanovsky.github.io/XCStoSVG/) —
 maintained by [bbraeu](https://github.com/bbraeu).
+
+## The tools
+
+Each tool is a page of its own with its own title and description; the list in
+`src/lib/tools.ts` is what the header menu, the landing page's launcher and the
+switcher on every tool page are all built from. Adding a tool means an entry
+there plus a page that names it.
+
+| Page | Tool | In → out |
+| --- | --- | --- |
+| `/convert/` | **xTool project converter** | `.xcs` / `.xs` → DXF · FDS · SVG |
+| `/contour/` | **Outer contour tracer** | `.svg` / `.xcs` / `.xs` → cut line |
+| `/trace/` | **Trace an image** | `.png` / `.jpg` / `.gif` / `.bmp` / `.webp` → vectors |
+| `/invert/` | **Invert a design** | `.svg` / `.xcs` / `.xs` → negative |
+
+The converter, contour tracer and inverter all read a dropped file through the
+same `src/lib/design.ts` — one `DesignDoc` per canvas, geometry in millimetres
+with curves already flattened — so every tool works on exactly what would be cut.
+The image tracer starts from pixels instead, and joins the others at the point
+where geometry becomes a DXF, an `.fds` or an SVG.
 
 ## Input formats
 
@@ -17,12 +38,14 @@ maintained by [bbraeu](https://github.com/bbraeu).
 | --- | --- | --- |
 | **.xcs** | xTool Creative Space | plain JSON project file |
 | **.xs** | xTool Studio | ZIP archive (`xcs-workspace-v2`) holding the same model split into parts |
+| **.svg** | anything | contour tracer and inverter only; read at 96 dpi when it states no physical size |
+| **.png / .jpg / .gif / .bmp / .webp** | anything | image tracer only; pixels, read at 96 dpi unless a width is given |
 
 ## Output formats
 
 | Format | Operations | Notes |
 | --- | --- | --- |
-| **DXF** (default) | colour-coded (ACI) | AutoCAD R2000, single layer, read by LightBurn / Fusion / any CAM tool |
+| **DXF** | colour-coded (ACI) | AutoCAD R2000, single layer, read by LightBurn / Fusion / any CAM tool |
 | **FDS** | natively assigned layers | Falcon Design Space project — engrave & cut modes pre-assigned on import |
 | **SVG** | colour-coded strokes/fills | The only output that carries raster images |
 
@@ -42,10 +65,8 @@ untouched, since laser software maps an image's luminance to laser power.
 
 ## Outer contour
 
-The second tool in the app traces the **cut line around a design** — for the
-backing plate you glue the original on top of. It takes an `.svg` or the same
-`.xcs` / `.xs` projects, and the geometry comes from the very same extraction the
-DXF export uses, so the outline is traced around exactly what would be cut.
+Traces the **cut line around a design** — for the backing plate you glue the
+original on top of.
 
 - A design is split into **items**: every subpath is treated as a ring, and a ring
   is an item when no other ring contains it. Holes and inner detail therefore drop
@@ -65,19 +86,88 @@ DXF export uses, so the outline is traced around exactly what would be cut.
 - Two exports: the cut line alone, or the cut line in red together with the traced
   design in black.
 
+## Invert
+
+Swaps filled and empty: every area the design covers comes out untouched, and
+everything around it comes out engraved away — so the artwork stands proud of the
+plate. That is what engraving a **rubber stamp** needs, and what makes stencils,
+inlays and any "engrave the background" job.
+
+- **Exact geometry, not a re-traced picture.** A design's filled area is already
+  defined by nesting: an outermost ring is filled, a ring inside it is a hole, a
+  ring inside that is filled again — which is the even-odd fill rule. So one more
+  ring *around* everything shifts every region up a level of nesting and flips it:
+  the plate becomes filled, each shape becomes a hole in it, and the counter of an
+  "o" becomes solid again. The whole inversion is a single path — the frame
+  followed by every ring of the design — drawn even-odd. Nothing is resampled, so
+  the result is accurate to the 0.01 mm the curves were flattened to.
+- **The plate** is a rectangle (bounding box + margin, with an optional corner
+  radius), an ellipse of the design's own proportions passing through the corners
+  of that box, or a circle reaching its far corner. Whether the artwork actually
+  fits inside a rounded or elliptical plate is asked point by point, in closed
+  form, and said out loud when it does not.
+- **Mirroring** flips the design about its own centre, leaving the plate where it
+  was — a stamp prints back-to-front, so it has to be engraved that way.
+- **Overlaps are checked for.** Alternating fill is the design's own meaning only
+  while its shapes do not cross; where two filled shapes overlap, even-odd reads
+  the overlap as a hole, which would engrave a crack through what should be one
+  solid piece. Ring pairs whose boxes meet without one holding the other are
+  tested for real edge crossings (`segsCross`, budget-capped) and the warning names
+  the fix: union them first.
+- Optionally repeats the plate's edge in cutting red, so one file both engraves the
+  background and frees the piece from the sheet.
+
+## Trace
+
+Turns a bitmap into vector paths, with the controls of LightBurn's *Bild
+nachzeichnen* — whose German labels are potrace's parameters, so the numbers
+transfer: **Schwelle** is the threshold, **Glätte** is `alphamax`, **Optimieren**
+is `opttolerance`, **Ignoriere weniger als** is `turdsize`.
+
+- **Outline** mode takes the boundary of everything darker than the threshold,
+  holes included. The bitmap is decomposed by tracing a boundary, flipping
+  everything it encloses, and going round again — so each pass finds the next
+  level of nesting, and the even-odd fill rule then means exactly what the nesting
+  does. No polarity has to be recorded.
+- **Centreline** mode (LightBurn's *Sketch nachzeichnen*) thins each stroke to a
+  one-pixel skeleton first, so a 2 mm pen line becomes a single path to engrave
+  rather than a long thin outline to cut around. Thinning and skeleton extraction
+  are [skeleton-tracing](https://github.com/LingDong-/skeleton-tracing) by
+  Lingdong Huang (MIT); the fragments it returns are spliced back into chains here
+  so a junction does not become a kink.
+- **Corners survive.** Whether a vertex is rounded into a curve or kept as a
+  corner is decided from its *normalised sagitta* — its distance from the chord
+  between its neighbours, over the length of that chord. That is scale-free, so at
+  the default a traced circle becomes curves while a traced square comes out as
+  four nodes and four right angles. `Glätte 0` gives a plain polygon.
+- **Node reduction is measured, not assumed.** Douglas–Peucker reports the largest
+  deviation it actually accepted, which is what the accuracy figure shows. It runs
+  at half a pixel plus Optimieren, because a traced boundary is a staircase and
+  that much has to be absorbed before the slider adds anything — pre-smoothing the
+  path instead would round real corners off.
+- Big images are traced at a working size (1600 px for outlines, 900 for
+  centrelines) so the sliders stay live; the physical size still comes from the
+  source pixels.
+- The preview shows the traced vectors over the source image faded in, and can mark
+  every node — the two things that make a threshold judgeable rather than guessable.
+
+The outline half is this project's own code, written from the published
+polygon-tracing approach rather than ported: every potrace binding on npm is
+GPL-2.0, which would spread to the whole of LaserKit.
+
 An SVG that states no physical size is read at 96 dpi (what every importer
 assumes) and the width can be corrected in the panel; `.xcs` coordinates are
 millimetres already.
 
 ## Project settings
 
-What a DXF/SVG/FDS cannot carry is shown under the preview instead: machine and
-laser module, material slot with thickness and focal length, air-assist and
-purifier gears, the material's precaution codes, and a per-operation table of
-power / speed / passes / density — the numbers to re-enter as cut settings after
-importing. A dropdown converts that table for another laser module (diode, IR,
-CO₂) by holding the energy delivered per millimetre constant; see
-`src/lib/lasers.ts` for the arithmetic and its limits.
+What a DXF/SVG/FDS cannot carry is shown under the converter's preview instead:
+machine and laser module, material slot with thickness and focal length,
+air-assist and purifier gears, the material's precaution codes, and a
+per-operation table of power / speed / passes / density — the numbers to re-enter
+as cut settings after importing. A dropdown converts that table for another laser
+module (diode, IR, CO₂) by holding the energy delivered per millimetre constant;
+see `src/lib/lasers.ts` for the arithmetic and its limits.
 
 Material names are only shown when the project embeds them: current xTool
 versions store just the numeric id from their online catalogue, so `Material
@@ -110,16 +200,29 @@ versions store just the numeric id from their online catalogue, so `Material
   `[u32 LE length][u32 BE raw size][zlib]` (Qt `qCompress`) holding JSON with
   QPainterPath-style geometry. Operation modes: 0 = surface engraving,
   1 = line engraving, 2 = line cutting (air assist on).
-
 - **Outline** (`src/lib/outline.ts`): items from ring containment, the border and
   every grid-based connection from an exact Euclidean distance transform
   (Felzenszwalb & Huttenlocher) over a filled bitmap, and marching squares to walk
   the result back out to a polyline.
+- **Trace** (`src/lib/trace.ts`): threshold → boundary decomposition by
+  trace-and-flip (or thinning, for centrelines) → Douglas–Peucker → per-corner
+  curve fitting. Split into `prepareTrace` and `buildTrace` so that dragging Glätte
+  or Optimieren re-fits curves to an already-decomposed bitmap instead of
+  re-thresholding two million pixels.
+- **Invert** (`src/lib/invert.ts`): ring nesting depth, a closed-form plate, and
+  one even-odd path. DXF has no fills, so every ring goes out as a closed contour
+  in the engraving colour and the alternation is left to the laser software —
+  which is how LightBurn, Falcon and xTool fill nested contours anyway; an `.fds`
+  shape is a QPainterPath, whose default rule is odd-even.
 
 ## Stack
 
-[Astro](https://astro.build) + React (converter island) + Tailwind CSS v4,
+[Astro](https://astro.build) + React (one island per tool) + Tailwind CSS v4,
 written in TypeScript. Deployed to GitHub Pages via `.github/workflows/static.yml`.
+
+Runtime dependencies are deliberately few: `fflate` and `client-zip` for the ZIP
+formats, and `skeleton-tracing-js` (MIT) for centreline thinning. Everything else —
+DXF, FDS, contour offsetting, inversion, outline tracing — is in `src/lib`.
 
 ## Development
 
@@ -129,3 +232,5 @@ pnpm dev       # local dev server
 pnpm check     # typecheck (astro check)
 pnpm build     # production build to dist/
 ```
+
+`pnpm check` is not run by CI — run it by hand before pushing.

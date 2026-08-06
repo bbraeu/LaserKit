@@ -1,0 +1,74 @@
+---
+import ToolPage from "../components/ToolPage.astro";
+import Tracer from "../components/Tracer";
+---
+
+<ToolPage tool="trace">
+    <Fragment slot="lead">
+        Drop in a photo, a scan or a logo and get <strong class="text-slate-300">real vector paths</strong> back —
+        the boundary of every dark region, or one line down the middle of every stroke. Every slider is live, so the
+        preview follows you as you drag it rather than after you commit.
+    </Fragment>
+
+    <Tracer client:load />
+
+    <section slot="notes" class="relative px-4 pb-24">
+        <div class="mx-auto w-[min(72rem,100%)]">
+            <div class="grid gap-5 lg:grid-cols-3">
+                <article class="glass reveal rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">Outline or centreline</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        <strong class="text-slate-300">Outline</strong> traces the boundary of everything darker than
+                        the threshold, holes included, so a filled logo comes out as shapes with their counters intact. <strong class="text-slate-300">Centreline</strong> peels each stroke down to a one-pixel
+                        skeleton first, so a 2 mm pen line becomes a single path to engrave rather than a long thin
+                        outline to cut around.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 110ms">
+                    <h2 class="text-lg font-semibold text-white">Judge it, don't guess it</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        The source image sits faded behind the vectors, so moving the threshold shows you immediately
+                        what is being kept and what is being dropped. Turn on <em>show points</em> to see what Optimize
+                        is really costing you, and read the accuracy figure underneath — it is the largest deviation
+                        actually accepted, measured on the path, not a restatement of the slider.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 220ms">
+                    <h2 class="text-lg font-semibold text-white">Corners stay corners</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Smoothing is decided per corner, from how sharply the path bends relative to the span it cuts
+                        across — a scale-free measure. So at the default a traced circle becomes curves while a traced
+                        square comes out as four nodes and four right angles, instead of everything being rounded
+                        equally.
+                    </p>
+                </article>
+            </div>
+
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">Getting a clean trace</h2>
+                <ul class="mt-3 space-y-2 text-sm leading-relaxed text-slate-400">
+                    <li>
+                        <strong class="text-slate-300">Start with the threshold.</strong> Everything else is polish. If
+                        the shape is missing or the whole image fills in, that slider is the reason — and <em>invert</em> is the fix for light artwork on a dark ground.
+                    </li>
+                    <li>
+                        <strong class="text-slate-300">A JPEG traces worse than a PNG.</strong> Its compression
+                        speckles the edges, and every speck becomes its own path. Raise <em>ignore smaller than</em> until they are gone.
+                    </li>
+                    <li>
+                        <strong class="text-slate-300">Big images are traced at a working size</strong> — 1600 px for
+                        outlines, 900 for centrelines — so the sliders stay live. The physical size is unaffected: it
+                        comes from the source pixels, and you can override it outright.
+                    </li>
+                    <li>
+                        <strong class="text-slate-300">Photographs are not line art.</strong> A single threshold
+                        through a continuous-tone photo gives you a high-contrast silhouette, which is sometimes
+                        exactly what you want and sometimes nothing like it. For tonal engraving, feed the photo to
+                        your laser software as an image and let it dither instead.
+                    </li>
+                </ul>
+            </div>
+
+        </div>
+    </section>
+</ToolPage>

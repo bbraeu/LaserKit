@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { buildOutline, hitItem, readOutlineFile, BORDER_COLOR, CUT_COLOR, ITEM_COLOR, MUTED_COLOR } from "../lib/outline";
 import type { ConnectMode, OutlineDoc, OutlineResult } from "../lib/outline";
 import { downloadBlob, trackEvent } from "../lib/util";
+import { DropZone } from "./DropZone";
+import { FIELD_CLASS, NumberField } from "./NumberField";
 import { usePanZoom, ZoomControls, PanHint } from "./PanZoom";
-
-const INPUT_CLASS = "rounded-lg border border-white/15 bg-slate-900 px-2 py-1 text-slate-200 outline-none transition hover:border-cyan-400/50 focus-visible:border-cyan-400/60";
 
 /** Range of the border, in mm — the slider's ends and what the field accepts. */
 const BORDER_MIN = -25;
@@ -41,9 +41,6 @@ export default function Outliner() {
     const [aDoc, setDocs] = useState<OutlineDoc[] | null>(null);
     const [tab, setTab] = useState(0);
     const [border, setBorder] = useState(0);
-    // The field keeps its own text so a half-typed "-" or "1." is not fought over
-    // while it is being entered; the slider writes both.
-    const [borderText, setBorderText] = useState("0");
     const [width, setWidth] = useState<number | undefined>(undefined);
     const [pick, setPick] = useState(false);
     const [connect, setConnect] = useState(false);
@@ -54,8 +51,11 @@ export default function Outliner() {
     const [result, setResult] = useState<OutlineResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
-    const [dragOver, setDragOver] = useState(false);
-    const inputRef = useRef<HTMLInputElement>(null);
+    // What the preview is refitted for. Set together with the result rather than
+    // derived from the controls: a new width reaches this component a render before
+    // the geometry it rescales, and refitting to the outgoing drawing then leaves
+    // the incoming one at the wrong zoom.
+    const [fitKey, setFitKey] = useState("");
 
     const openFile = useCallback(async (file: File) => {
         setBusy(true);
@@ -82,31 +82,7 @@ export default function Outliner() {
         }
     }, []);
 
-    const onDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setDragOver(false);
-        const file = e.dataTransfer.files?.[0];
-        if (file) void openFile(file);
-    }, [openFile]);
-
-    const onPick = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) void openFile(file);
-        e.target.value = ""; // allow re-selecting the same file
-    }, [openFile]);
-
     const oDoc = aDoc?.[tab];
-
-    const setSlider = (n: number): void => {
-        setBorder(n);
-        setBorderText(String(n));
-    };
-
-    const onBorderText = (s: string): void => {
-        setBorderText(s);
-        const n = parseFloat(s);
-        if (isFinite(n)) setBorder(Math.min(BORDER_MAX, Math.max(BORDER_MIN, n)));
-    };
 
     // Re-trace on every change. The short delay keeps dragging the border slider
     // from queueing one offset per pixel of travel.
@@ -120,6 +96,10 @@ export default function Outliner() {
                     selection: pick ? aSel : null,
                     connect: connect ? { mode, reach } : null
                 }));
+                // Only a new file, canvas or scale is a different drawing — picking
+                // an item or nudging the border must leave the view where the user
+                // put it.
+                setFitKey(`${name}|${tab}|${width ?? ""}`);
                 setError(null);
             } catch (e) {
                 setResult(null);
@@ -127,11 +107,9 @@ export default function Outliner() {
             }
         }, 30);
         return () => clearTimeout(id);
-    }, [oDoc, border, width, pick, aSel, connect, mode, reach]);
+    }, [oDoc, border, width, pick, aSel, connect, mode, reach, name, tab]);
 
-    // The view is refitted for a new file, canvas or scale only — picking an item
-    // or nudging the border must leave it where the user put it.
-    const { ref: previewRef, zoomBy, resetView } = usePanZoom(result?.preview, `${name}|${tab}|${width ?? ""}`);
+    const { ref: previewRef, zoomBy, resetView } = usePanZoom(result?.preview, fitKey);
 
     // Picking an item: hit-tested against the geometry rather than against the
     // click target, because panning captures the pointer and would retarget it.
@@ -175,38 +153,14 @@ export default function Outliner() {
 
     return (
         <div className="mx-auto w-full max-w-3xl">
-            {/* Drop zone */}
-            <div
-                role="button"
-                tabIndex={0}
-                aria-label="Select or drop an .svg, .xcs or .xs file"
-                onClick={() => inputRef.current?.click()}
-                onKeyDown={e => { if (e.key === "Enter" || e.key === " ") inputRef.current?.click(); }}
-                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={onDrop}
-                className={`group relative cursor-pointer overflow-hidden rounded-2xl border-2 border-dashed p-10 text-center transition-all duration-300 outline-none
-                    ${dragOver
-                        ? "border-cyan-300 bg-cyan-400/10 scale-[1.02] shadow-[0_0_60px_-12px_rgba(34,211,238,0.6)]"
-                        : "border-white/15 bg-white/[0.03] hover:border-cyan-400/60 hover:bg-white/[0.05] focus-visible:border-cyan-400/60"}`}
-            >
-                <div className="laser-beam" aria-hidden="true" />
-                <input ref={inputRef} type="file" accept=".svg,.xcs,.xs,image/svg+xml" className="hidden" onChange={onPick} />
-
-                <div className="pointer-events-none relative z-10 flex flex-col items-center gap-3">
-                    <div className="grid size-16 place-items-center rounded-2xl bg-linear-to-br from-cyan-400/20 to-violet-500/20 ring-1 ring-white/10 transition-transform duration-300 group-hover:scale-110">
-                        <svg className="size-8 text-cyan-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a7.5 7.5 0 1 0 15 0 7.5 7.5 0 0 0-15 0Zm3.75 0a3.75 3.75 0 1 0 7.5 0 3.75 3.75 0 0 0-7.5 0Z" />
-                        </svg>
-                    </div>
-                    <p className="text-lg font-semibold text-white">
-                        {busy && !aDoc ? "Reading…" : "Drop an .svg, .xcs or .xs file here"}
-                    </p>
-                    <p className="text-sm text-slate-400">
-                        or click to browse — everything runs 100% in your browser
-                    </p>
-                </div>
-            </div>
+            <DropZone
+                accept=".svg,.xcs,.xs,image/svg+xml"
+                icon="M4.5 12a7.5 7.5 0 1 0 15 0 7.5 7.5 0 0 0-15 0Zm3.75 0a3.75 3.75 0 1 0 7.5 0 3.75 3.75 0 0 0-7.5 0Z"
+                label={busy && !aDoc ? "Reading…" : "Drop an .svg, .xcs or .xs file here"}
+                sub="or click to browse — everything runs 100% in your browser"
+                busy={busy}
+                onFile={file => void openFile(file)}
+            />
 
             {error && (
                 <div role="alert" className="mt-6 rounded-xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-200">
@@ -306,7 +260,7 @@ export default function Outliner() {
                                             aria-label="How to connect the items"
                                             value={mode}
                                             onChange={e => setMode(e.target.value as ConnectMode)}
-                                            className={`text-sm ${INPUT_CLASS}`}
+                                            className={`text-sm ${FIELD_CLASS}`}
                                         >
                                             {CONNECT_MODES.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
                                         </select>
@@ -389,20 +343,13 @@ export default function Outliner() {
                             <div>
                                 <div className="flex items-baseline justify-between gap-2">
                                     <label htmlFor="outline-border" className="text-sm font-medium text-white">Border</label>
-                                    <span className="flex items-center gap-1.5 text-xs text-slate-400">
-                                        <input
-                                            type="number"
-                                            aria-label="Border in millimetres"
-                                            min={BORDER_MIN}
-                                            max={BORDER_MAX}
-                                            step="any"
-                                            value={borderText}
-                                            onChange={e => onBorderText(e.target.value)}
-                                            onBlur={() => setBorderText(String(border))}
-                                            className={`w-20 ${INPUT_CLASS} tabular-nums`}
-                                        />
-                                        mm
-                                    </span>
+                                    <NumberField
+                                        label="Border in millimetres"
+                                        value={border}
+                                        min={BORDER_MIN}
+                                        max={BORDER_MAX}
+                                        onChange={setBorder}
+                                    />
                                 </div>
                                 <input
                                     id="outline-border"
@@ -411,7 +358,7 @@ export default function Outliner() {
                                     max={BORDER_MAX}
                                     step={0.5}
                                     value={border}
-                                    onChange={e => setSlider(parseFloat(e.target.value))}
+                                    onChange={e => setBorder(parseFloat(e.target.value))}
                                     className="mt-2 w-full accent-cyan-400"
                                 />
                                 <span className="mt-1 block text-[11px] leading-snug text-slate-500">
@@ -428,22 +375,13 @@ export default function Outliner() {
                                             {mode === "wrap" ? "Reach" : "Connection"}
                                         </label>
                                         {mode === "wrap" && (
-                                            <span className="flex items-center gap-1.5 text-xs text-slate-400">
-                                                <input
-                                                    type="number"
-                                                    aria-label="Shrink-wrap reach in millimetres"
-                                                    min="0.5"
-                                                    max={reachMax}
-                                                    step="any"
-                                                    value={reach ?? result?.autoReach ?? 0}
-                                                    onChange={e => {
-                                                        const n = parseFloat(e.target.value);
-                                                        if (isFinite(n) && n > 0) setReach(Math.min(reachMax, n));
-                                                    }}
-                                                    className={`w-20 ${INPUT_CLASS} tabular-nums`}
-                                                />
-                                                mm
-                                            </span>
+                                            <NumberField
+                                                label="Shrink-wrap reach in millimetres"
+                                                value={reach ?? result?.autoReach ?? 0}
+                                                min={0.5}
+                                                max={reachMax}
+                                                onChange={setReach}
+                                            />
                                         )}
                                     </div>
                                     {mode === "wrap" && (
@@ -476,19 +414,14 @@ export default function Outliner() {
                             {oDoc?.assumed && (
                                 <label className="block">
                                     <span className="text-sm font-medium text-white">Design width</span>
-                                    <span className="mt-2 flex items-center gap-2 text-xs text-slate-400">
-                                        <input
-                                            type="number"
-                                            min="1"
-                                            step="any"
+                                    <span className="mt-2 flex">
+                                        <NumberField
+                                            label="Design width in millimetres"
                                             value={width ?? Math.round(oDoc.width * 10) / 10}
-                                            onChange={e => {
-                                                const n = parseFloat(e.target.value);
-                                                if (isFinite(n) && n > 0) setWidth(n);
-                                            }}
-                                            className={`w-24 ${INPUT_CLASS} tabular-nums`}
+                                            min={1}
+                                            onChange={setWidth}
+                                            className="w-24"
                                         />
-                                        <span>mm</span>
                                     </span>
                                     <span className="mt-1 block text-[11px] leading-snug text-slate-500">
                                         This SVG carries no physical size, so 96 dpi was assumed. Set the width the whole

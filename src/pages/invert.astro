@@ -1,0 +1,83 @@
+---
+import ToolPage from "../components/ToolPage.astro";
+import Inverter from "../components/Inverter";
+---
+
+<ToolPage tool="invert">
+    <Fragment slot="lead">
+        Swap filled and empty: every area your design covers comes out <strong class="text-slate-300">untouched</strong>,
+        and everything around it comes out <strong class="text-slate-300">engraved away</strong> — so the artwork
+        stands proud of the plate. That is what a rubber stamp needs, and what makes stencils, inlays and any
+        "engrave the background" job.
+    </Fragment>
+
+    <Inverter client:load />
+
+    <section slot="notes" class="relative px-4 pb-24">
+        <div class="mx-auto w-[min(72rem,100%)]">
+            <div class="grid gap-5 lg:grid-cols-3">
+                <article class="glass reveal rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">Exact, not re-traced</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        A design's filled area is already defined by nesting: an outermost ring is filled, a ring
+                        inside it is a hole, a ring inside that is filled again — the even-odd rule. So one more
+                        ring <em>around</em> everything shifts every region up a level and flips it. No bitmap, no
+                        resampling: the result is accurate to the 0.01 mm the curves were flattened to.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 110ms">
+                    <h2 class="text-lg font-semibold text-white">Mirror it for a stamp</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        A stamp prints what touches the paper, so it has to be engraved back-to-front or the text
+                        comes out reversed. Pick <strong class="text-slate-300">Mirror ↔</strong> and the design
+                        flips about its own centre — the plate stays exactly where it was.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 220ms">
+                    <h2 class="text-lg font-semibold text-white">Merge overlaps first</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Alternating fill is the design's own meaning only while its shapes do not cross. Where two
+                        filled shapes overlap, even-odd reads the overlap as a hole — which would engrave a crack
+                        through the middle of what should be one solid piece. The tool checks for that and says so;
+                        the fix is a union in your design app.
+                    </p>
+                </article>
+            </div>
+
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">What each format does with it</h2>
+                <dl class="mt-3 grid gap-4 text-sm leading-relaxed sm:grid-cols-3">
+                    <div>
+                        <dt class="font-semibold text-slate-200">SVG</dt>
+                        <dd class="mt-1 text-slate-400">
+                            One path, <code class="text-slate-300">fill-rule="evenodd"</code>, in surface-engraving
+                            blue — the inversion exactly as previewed, at true size in millimetres.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">DXF</dt>
+                        <dd class="mt-1 text-slate-400">
+                            DXF has no fills, so every ring goes out as a closed contour in the engraving colour and
+                            the alternation is left to your laser software — which is how nested closed contours get
+                            filled there anyway. Switch that colour to a fill/scan operation.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Falcon Design Space</dt>
+                        <dd class="mt-1 text-slate-400">
+                            One surface-engraving shape holding the plate and every ring. An .fds shape is a
+                            QPainterPath, whose default rule is odd-even, so it opens ready to run.
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+
+            <p class="reveal mt-5 text-xs leading-relaxed text-slate-500">
+                A note on stamp material: this tool gives you the geometry, not the depth. Laser-engraved rubber
+                needs enough material removed that the background cannot touch the paper — usually a fill at high
+                power with several passes, or a defocused pass — and a shoulder angle only a 3D/greyscale engrave
+                can produce. Cut a test tile before committing a full sheet.
+            </p>
+        </div>
+    </section>
+</ToolPage>

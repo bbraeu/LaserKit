@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { toSVG, toDXF, toFDS, getUsedOperations } from "../lib/convert";
 import type { XcsProject } from "../lib/convert";
 import type { Operation } from "../lib/dxf";
@@ -7,30 +7,11 @@ import type { ProjectMeta, CanvasMeta } from "../lib/meta";
 import { LASERS, getLaser, detectLaser, convertSetting } from "../lib/lasers";
 import { downloadBlob, downloadAsZip, trackEvent } from "../lib/util";
 import { isXsArchive, parseXs } from "../lib/xs";
+import { DropZone } from "./DropZone";
+import { FORMATS, FormatMenu } from "./FormatMenu";
+import { FIELD_CLASS } from "./NumberField";
+import type { FormatKey } from "./FormatMenu";
 import { usePanZoom, ZoomControls, PanHint } from "./PanZoom";
-
-export const FORMATS = {
-    dxf: {
-        ext: "dxf",
-        label: "DXF",
-        note: "default",
-        desc: "Universal CAD/CAM format — operations colour-coded (LightBurn, Fusion, …)"
-    },
-    fds: {
-        ext: "fds",
-        label: "Falcon Design Space",
-        note: ".fds",
-        desc: "Native FDS project — engrave & cut layers already assigned on import"
-    },
-    svg: {
-        ext: "svg",
-        label: "SVG",
-        note: "vector",
-        desc: "Colour-coded vector graphic — images keep their original pixels"
-    }
-} as const;
-
-type FormatKey = keyof typeof FORMATS;
 
 interface CanvasResult {
     title: string;
@@ -77,8 +58,6 @@ const usableFormat = (fmt: FormatKey, bHasRaster: boolean): FormatKey =>
 
 const withUnit = (n: number | undefined, sUnit: string): string =>
     n === undefined ? "—" : `${n}${sUnit}`;
-
-const SELECT_CLASS = "rounded-lg border border-white/15 bg-slate-900 px-2 py-1 text-slate-200 outline-none transition hover:border-cyan-400/50 focus-visible:border-cyan-400/60";
 
 // The machine setup and the laser parameters behind each operation. They cannot
 // travel inside a DXF/SVG/FDS file, so they are listed here for re-entering as
@@ -144,7 +123,7 @@ function SettingsPanel({ oProject, oCanvas }: { oProject: ProjectMeta; oCanvas: 
                     <>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
                             <span>Convert from</span>
-                            <select aria-label="Laser the project was made for" value={source} className={SELECT_CLASS}
+                            <select aria-label="Laser the project was made for" value={source} className={FIELD_CLASS}
                                 onChange={e => setSource(e.target.value)}>
                                 <option value="">unknown</option>
                                 {LASERS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
@@ -155,7 +134,7 @@ function SettingsPanel({ oProject, oCanvas }: { oProject: ProjectMeta; oCanvas: 
                                 </span>
                             )}
                             <span>to</span>
-                            <select aria-label="Laser to convert the settings for" value={target} className={SELECT_CLASS}
+                            <select aria-label="Laser to convert the settings for" value={target} className={FIELD_CLASS}
                                 onChange={e => {
                                     setTarget(e.target.value);
                                     if (e.target.value) trackEvent("convert_laser");
@@ -274,11 +253,10 @@ export default function Converter() {
     const [state, setState] = useState<ConversionState | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
-    const [dragOver, setDragOver] = useState(false);
     const [tab, setTab] = useState(0);
-    const inputRef = useRef<HTMLInputElement>(null);
+    const [format, setFormat] = useState<FormatKey>("dxf");
 
-    const convertFile = useCallback(async (file: File) => {
+    const convertFile = async (file: File): Promise<void> => {
         setBusy(true);
         setError(null);
         setState(null);
@@ -323,41 +301,7 @@ export default function Converter() {
         } finally {
             setBusy(false);
         }
-    }, []);
-
-    const onDrop = useCallback((e: React.DragEvent) => {
-        e.preventDefault();
-        setDragOver(false);
-        const file = e.dataTransfer.files?.[0];
-        if (file) void convertFile(file);
-    }, [convertFile]);
-
-    const onPick = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) void convertFile(file);
-        e.target.value = ""; // allow re-selecting the same file
-    }, [convertFile]);
-
-    const [format, setFormat] = useState<FormatKey>("dxf");
-    const [menuOpen, setMenuOpen] = useState(false);
-    const menuRef = useRef<HTMLDivElement>(null);
-
-    // Close the format menu on outside click or Escape.
-    useEffect(() => {
-        if (!menuOpen) return;
-        const onDown = (e: PointerEvent): void => {
-            if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
-        };
-        const onKey = (e: KeyboardEvent): void => {
-            if (e.key === "Escape") setMenuOpen(false);
-        };
-        document.addEventListener("pointerdown", onDown);
-        document.addEventListener("keydown", onKey);
-        return () => {
-            document.removeEventListener("pointerdown", onDown);
-            document.removeEventListener("keydown", onKey);
-        };
-    }, [menuOpen]);
+    };
 
     const active = state?.canvases[tab];
 
@@ -390,38 +334,16 @@ export default function Converter() {
 
     return (
         <div className="mx-auto w-full max-w-3xl">
-            {/* Drop zone */}
-            <div
-                role="button"
-                tabIndex={0}
-                aria-label="Select or drop an .xcs or .xs file"
-                onClick={() => inputRef.current?.click()}
-                onKeyDown={e => { if (e.key === "Enter" || e.key === " ") inputRef.current?.click(); }}
-                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={onDrop}
-                className={`group relative cursor-pointer overflow-hidden rounded-2xl border-2 border-dashed p-10 text-center transition-all duration-300 outline-none
-                    ${dragOver
-                        ? "border-cyan-300 bg-cyan-400/10 scale-[1.02] shadow-[0_0_60px_-12px_rgba(34,211,238,0.6)]"
-                        : "border-white/15 bg-white/[0.03] hover:border-cyan-400/60 hover:bg-white/[0.05] focus-visible:border-cyan-400/60"}`}
-            >
-                <div className="laser-beam" aria-hidden="true" />
-                <input ref={inputRef} type="file" accept=".xcs,.xs" className="hidden" onChange={onPick} />
-
-                <div className="pointer-events-none relative z-10 flex flex-col items-center gap-3">
-                    <div className="grid size-16 place-items-center rounded-2xl bg-linear-to-br from-cyan-400/20 to-violet-500/20 ring-1 ring-white/10 transition-transform duration-300 group-hover:scale-110">
-                        <svg className="size-8 text-cyan-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.6">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
-                        </svg>
-                    </div>
-                    <p className="text-lg font-semibold text-white">
-                        {busy ? "Converting…" : "Drop your .xcs or .xs file here"}
-                    </p>
-                    <p className="text-sm text-slate-400">
-                        {busy ? "flattening curves to 0.01 mm" : "or click to browse — conversion runs 100% in your browser"}
-                    </p>
-                </div>
-            </div>
+            <DropZone
+                accept=".xcs,.xs"
+                icon="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"
+                label="Drop your .xcs or .xs file here"
+                sub="or click to browse — conversion runs 100% in your browser"
+                busy={busy}
+                busyLabel="Converting…"
+                busySub="flattening curves to 0.01 mm"
+                onFile={file => void convertFile(file)}
+            />
 
             {error && (
                 <div role="alert" className="mt-6 rounded-xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-200">
@@ -479,63 +401,15 @@ export default function Converter() {
                                         </li>
                                     ))}
                                 </ul>
-                                {/* Split download button: main = current format, arrow = format menu */}
-                                <div ref={menuRef} className="relative">
-                                    <div className="flex shadow-lg shadow-violet-500/25">
-                                        <button
-                                            onClick={() => downloadOne(active, activeFormat)}
-                                            className="rounded-l-lg bg-linear-to-r from-cyan-500 to-violet-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 active:scale-95"
-                                        >
-                                            Download {fileNameFor(active, activeFormat)}
-                                        </button>
-                                        <button
-                                            aria-label="Choose download format"
-                                            aria-expanded={menuOpen}
-                                            aria-haspopup="menu"
-                                            onClick={() => setMenuOpen(o => !o)}
-                                            className="rounded-r-lg border-l border-white/30 bg-violet-500 px-2.5 text-white transition hover:brightness-110"
-                                        >
-                                            <svg className={`size-4 transition-transform ${menuOpen ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-                                            </svg>
-                                        </button>
-                                    </div>
-
-                                    {menuOpen && (
-                                        <div role="menu" className="absolute top-full right-0 z-30 mt-2 w-80 rounded-xl bg-slate-900/95 p-1.5 ring-1 ring-white/15 backdrop-blur-xl">
-                                            {(Object.keys(FORMATS) as FormatKey[]).map(key => {
-                                                // Unavailable for this canvas: it holds an image the format cannot carry.
-                                                const bBlocked = activeHasRaster && !carriesRaster(key);
-                                                return (
-                                                    <button
-                                                        key={key}
-                                                        role="menuitem"
-                                                        disabled={bBlocked}
-                                                        aria-disabled={bBlocked}
-                                                        title={bBlocked ? "This canvas contains an image, which this format cannot store" : undefined}
-                                                        onClick={() => { setFormat(key); setMenuOpen(false); downloadOne(active, key); }}
-                                                        className={`flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left transition ${bBlocked ? "cursor-not-allowed opacity-40" : "hover:bg-white/10"}`}
-                                                    >
-                                                        <span className={`mt-0.5 grid size-5 shrink-0 place-items-center rounded-full text-xs ${key === activeFormat ? "bg-cyan-400 text-slate-900" : "bg-white/10 text-transparent"}`}>✓</span>
-                                                        <span>
-                                                            <span className="flex items-center gap-2 text-sm font-semibold text-white">
-                                                                {FORMATS[key].label}
-                                                                <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-medium text-slate-300">
-                                                                    {bBlocked ? "no image support" : FORMATS[key].note}
-                                                                </span>
-                                                            </span>
-                                                            <span className="mt-0.5 block text-xs leading-snug text-slate-400">
-                                                                {bBlocked
-                                                                    ? "Cannot store the image on this canvas — vector geometry only"
-                                                                    : FORMATS[key].desc}
-                                                            </span>
-                                                        </span>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
+                                <FormatMenu
+                                    active={activeFormat}
+                                    label={`Download ${fileNameFor(active, activeFormat)}`}
+                                    onDownload={fmt => { setFormat(fmt); downloadOne(active, fmt); }}
+                                    blocked={fmt => activeHasRaster && !carriesRaster(fmt)
+                                        ? "Cannot store the image on this canvas — vector geometry only"
+                                        : undefined}
+                                    blockedNote="no image support"
+                                />
                             </div>
 
                             {/* SVG preview with pan & zoom */}

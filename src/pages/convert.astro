@@ -1,0 +1,64 @@
+---
+import ToolPage from "../components/ToolPage.astro";
+import Converter from "../components/Converter";
+import { OPERATION_COLORS } from "../lib/dxf";
+
+const operations = [
+    OPERATION_COLORS.FILL_VECTOR_ENGRAVING!,
+    OPERATION_COLORS.VECTOR_ENGRAVING!,
+    OPERATION_COLORS.VECTOR_CUTTING!
+];
+---
+
+<ToolPage tool="convert">
+    <Fragment slot="lead">
+        Convert xTool Creative Space (<strong class="text-slate-300">.xcs</strong>) and xTool Studio
+        (<strong class="text-slate-300">.xs</strong>) projects to colour-coded <strong class="text-slate-300">DXF</strong>,
+        a native <strong class="text-slate-300">Falcon Design Space</strong> project or <strong class="text-slate-300">SVG</strong> — with surface engraving, line engraving and cutting
+        preserved as separate operations.
+    </Fragment>
+
+    <div class="mb-8 flex flex-wrap items-center gap-3">
+        {operations.map(op => (
+            <span class="glass flex items-center gap-2 rounded-full px-4 py-2 text-sm text-slate-300">
+                <span class="size-3 rounded-full shadow-[0_0_12px_2px_var(--tw-shadow-color)]" style={`background:${op.css}; --tw-shadow-color:${op.css}66`}></span>
+                {op.name}
+            </span>
+        ))}
+    </div>
+
+    <Converter client:load />
+
+    <section slot="notes" class="relative px-4 pb-24">
+        <div class="mx-auto grid w-[min(72rem,100%)] gap-5 lg:grid-cols-3">
+            <article class="glass reveal rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">Which format?</h2>
+                <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                    <strong class="text-slate-300">DXF</strong> is read by everything and carries the operation as
+                    an ACI colour on a single layer — colours rather than layers, because Falcon Design Space
+                    rearranges separate DXF layers on import. <strong class="text-slate-300">.fds</strong> is the native Falcon project: engrave and cut
+                    layers arrive already assigned. <strong class="text-slate-300">SVG</strong> is the only one
+                    that can carry a raster image, so a canvas holding a picture is offered as SVG alone rather
+                    than as a file with the image silently missing.
+                </p>
+            </article>
+            <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 110ms">
+                <h2 class="text-lg font-semibold text-white">Real millimetres</h2>
+                <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                    All three outputs state their physical size: the DXF declares <code class="text-slate-300">$INSUNITS = 4</code>,
+                    .fds coordinates are mm natively, and the SVG carries <code class="text-slate-300">width="430mm"</code> next to its viewBox. Without that an importer applies 96 dpi to the user units and the design
+                    lands 3.78× too small.
+                </p>
+            </article>
+            <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 220ms">
+                <h2 class="text-lg font-semibold text-white">The settings come too</h2>
+                <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                    Power, speed, passes and density cannot travel inside a DXF or SVG, so they are listed under
+                    the preview along with the machine, material slot, focus and air-assist gears — ready to
+                    re-enter as cut settings. A dropdown converts the table for another laser module by holding
+                    the energy per millimetre constant.
+                </p>
+            </article>
+        </div>
+    </section>
+</ToolPage>

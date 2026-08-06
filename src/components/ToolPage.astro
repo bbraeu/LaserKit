@@ -1,0 +1,61 @@
+---
+import Layout from "../layouts/Layout.astro";
+import ToolIcon from "./ToolIcon.astro";
+import { TOOLS, getTool } from "../lib/tools";
+
+// The frame every tool page shares: its own title and description, a switcher
+// across the kit, the heading, and then the tool itself. Anything a tool wants to
+// explain below its workspace goes into the "notes" slot.
+
+interface Props {
+    tool: string;
+}
+
+const { tool } = Astro.props;
+const oTool = getTool(tool);
+const base = import.meta.env.BASE_URL;
+---
+
+<Layout title={oTool.title} description={oTool.description} tool={tool}>
+    <section class="relative px-4 pt-28 pb-4">
+        <div class="mx-auto w-[min(72rem,100%)]">
+            <!-- Switching tools is one click from anywhere inside the kit -->
+            <nav aria-label="Tools" class="flex flex-wrap gap-2">
+                {TOOLS.map(o => (
+                    <a
+                        href={`${base}${o.slug}`}
+                        aria-current={o.id === tool ? "page" : undefined}
+                        title={o.hint}
+                        class:list={[
+                            "flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition",
+                            o.id === tool
+                                ? "border-cyan-400/40 bg-linear-to-r from-cyan-500/20 to-violet-500/20 font-semibold text-white"
+                                : "border-white/10 bg-white/[0.03] text-slate-400 hover:border-cyan-400/40 hover:text-white"
+                        ]}
+                    >
+                        <ToolIcon tool={o} class={`size-4 shrink-0 ${o.id === tool ? "text-cyan-300" : "text-slate-500"}`} />
+                        {o.short}
+                    </a>
+                ))}
+            </nav>
+
+            <h1 class="reveal is-visible mt-8 text-4xl font-black tracking-tight text-white sm:text-5xl">
+                {oTool.label}
+            </h1>
+            <p class="reveal is-visible mt-4 max-w-2xl text-lg text-slate-400" style="--reveal-delay: 80ms">
+                <slot name="lead">{oTool.blurb}</slot>
+            </p>
+            <p class="reveal is-visible mt-3 text-sm text-slate-500" style="--reveal-delay: 120ms">
+                Takes {oTool.accepts} · runs entirely in your browser · nothing is uploaded
+            </p>
+        </div>
+    </section>
+
+    <section class="relative px-4 pt-8 pb-16">
+        <div class="mx-auto w-[min(72rem,100%)]">
+            <slot />
+        </div>
+    </section>
+
+    <slot name="notes" />
+</Layout>

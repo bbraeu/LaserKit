@@ -1,19 +1,25 @@
 ---
 import "../styles/global.css";
+import ToolIcon from "../components/ToolIcon.astro";
+import { TOOLS } from "../lib/tools";
 
 interface Props {
     title: string;
     description: string;
+    /** id of the tool this page *is*, so the header can mark it as current */
+    tool?: string;
 }
 
-const { title, description } = Astro.props;
+const { title, description, tool } = Astro.props;
 const base = import.meta.env.BASE_URL;
 const isProd = import.meta.env.PROD;
 
 // Google Analytics 4 Measurement ID ("G-…"). Leave empty to disable analytics
 // entirely (no script is loaded). Tracked events: convert_file, DXF_Download,
 // FDS_Download, SVG_Download, download_zip, convert_laser, outline_file,
-// OUTLINE_Download, OUTLINE_DESIGN_Download — see trackEvent() in lib/util.ts.
+// OUTLINE_Download, OUTLINE_DESIGN_Download, invert_file, INVERT_DXF_Download,
+// INVERT_FDS_Download, INVERT_SVG_Download, trace_file, TRACE_DXF_Download,
+// TRACE_FDS_Download, TRACE_SVG_Download — see trackEvent() in lib/util.ts.
 // Uses Google Consent Mode v2 (advanced): gtag.js always loads with all
 // consent defaults denied; the banner decision is applied via consent update.
 const GA_MEASUREMENT_ID = "G-79BWTBS409";
@@ -70,19 +76,55 @@ const GA_MEASUREMENT_ID = "G-79BWTBS409";
 
     <!-- Nav -->
     <header class="fixed inset-x-0 top-0 z-50">
-        <nav class="glass mx-auto mt-4 flex w-[min(72rem,calc(100%-2rem))] items-center justify-between rounded-2xl px-5 py-3">
-            <a href={`${base}#top`} class="flex items-center gap-2.5 font-bold text-white">
+        <nav class="glass mx-auto mt-4 flex w-[min(72rem,calc(100%-2rem))] items-center justify-between gap-3 rounded-2xl px-5 py-3">
+            <a href={base} class="flex shrink-0 items-center gap-2.5 font-bold text-white">
                 <span class="grid size-8 place-items-center rounded-lg bg-linear-to-br from-cyan-400 to-violet-500 text-sm shadow-lg shadow-violet-500/30">⚡</span>
-                <span>XTool<span class="text-gradient">Converter</span></span>
+                <span>Laser<span class="text-gradient">Kit</span></span>
             </a>
-            <div class="hidden items-center gap-1 sm:flex">
-                <a href={`${base}#converter`} class="rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white">Converter</a>
-                <a href={`${base}#features`} class="rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white">Features</a>
-                <a href={`${base}#how`} class="rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white">How it works</a>
-                <a href={`${base}#credits`} class="rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white">Credits</a>
+
+            <div class="flex items-center gap-1">
+                <!-- Tools: a <details> so the menu works before (and without) any JS -->
+                <details class="nav-menu relative">
+                    <summary
+                        class:list={[
+                            "flex cursor-pointer list-none items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition hover:bg-white/5 hover:text-white [&::-webkit-details-marker]:hidden",
+                            tool ? "bg-white/10 text-white" : "text-slate-300"
+                        ]}
+                        aria-haspopup="menu"
+                    >
+                        Tools
+                        <svg class="size-3.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.4" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                        </svg>
+                    </summary>
+                    <div role="menu" class="absolute top-full left-1/2 z-40 mt-2 w-80 -translate-x-1/2 rounded-xl bg-slate-900/95 p-1.5 ring-1 ring-white/15 backdrop-blur-xl">
+                        {TOOLS.map(o => (
+                            <a
+                                role="menuitem"
+                                href={`${base}${o.slug}`}
+                                aria-current={o.id === tool ? "page" : undefined}
+                                class:list={[
+                                    "flex items-start gap-3 rounded-lg px-3 py-2.5 transition",
+                                    o.id === tool ? "bg-white/10" : "hover:bg-white/10"
+                                ]}
+                            >
+                                <ToolIcon tool={o} class={`mt-0.5 size-5 shrink-0 ${o.id === tool ? "text-cyan-300" : "text-slate-400"}`} />
+                                <span>
+                                    <span class="block text-sm font-semibold text-white">{o.short}</span>
+                                    <span class="mt-0.5 block text-[11px] text-slate-400">{o.hint}</span>
+                                </span>
+                            </a>
+                        ))}
+                    </div>
+                </details>
+
+                <a href={`${base}#features`} class="hidden rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white sm:block">Features</a>
+                <a href={`${base}#how`} class="hidden rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white sm:block">How it works</a>
+                <a href={`${base}#credits`} class="hidden rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white lg:block">Credits</a>
             </div>
+
             <a href="https://github.com/bbraeu/XToolConverter" target="_blank" rel="noopener"
-               class="rounded-lg border border-white/15 px-3.5 py-2 text-sm font-medium text-slate-200 transition hover:border-cyan-400/50 hover:text-white">
+               class="shrink-0 rounded-lg border border-white/15 px-3.5 py-2 text-sm font-medium text-slate-200 transition hover:border-cyan-400/50 hover:text-white">
                 GitHub
             </a>
         </nav>
@@ -98,7 +140,7 @@ const GA_MEASUREMENT_ID = "G-79BWTBS409";
                 Built by <a href="https://github.com/bbraeu" target="_blank" rel="noopener" class="font-medium text-slate-200 underline decoration-cyan-400/50 underline-offset-4 transition hover:text-cyan-300">bbraeu</a>
                 · based on <a href="https://nanovsky.github.io/XCStoSVG/" target="_blank" rel="noopener" class="font-medium text-slate-200 underline decoration-violet-400/50 underline-offset-4 transition hover:text-violet-300">XCStoSVG by Daniel Nanovski</a>
             </p>
-            <p class="text-xs text-slate-500">Files never leave your computer — conversion runs entirely in your browser.</p>
+            <p class="text-xs text-slate-500">Files never leave your computer — every tool runs entirely in your browser.</p>
             <button id="cookie-settings" class="text-xs text-slate-500 underline decoration-slate-600 underline-offset-2 transition hover:text-slate-300">
                 Cookie settings
             </button>
@@ -167,6 +209,21 @@ const GA_MEASUREMENT_ID = "G-79BWTBS409";
             </script>
         </>
     )}
+
+    <!-- A <details> menu does not close itself on an outside click or Escape -->
+    <script>
+        const closeMenus = (except?: Element | null): void => {
+            document.querySelectorAll<HTMLDetailsElement>("details.nav-menu[open]").forEach(el => {
+                if (el !== except) el.open = false;
+            });
+        };
+        document.addEventListener("pointerdown", e => {
+            closeMenus((e.target as Element | null)?.closest("details.nav-menu"));
+        });
+        document.addEventListener("keydown", e => {
+            if (e.key === "Escape") closeMenus();
+        });
+    </script>
 
     <!-- Scroll reveal -->
     <script>

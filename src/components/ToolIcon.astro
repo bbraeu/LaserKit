@@ -1,0 +1,15 @@
+---
+import type { ToolDef } from "../lib/tools";
+
+interface Props {
+    tool: ToolDef;
+    class?: string;
+}
+
+const { tool, class: sClass } = Astro.props;
+---
+
+<svg class={sClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+    <path stroke-linecap="round" stroke-linejoin="round" d={tool.icon} />
+    {tool.iconFill && <path d={tool.iconFill} fill="currentColor" stroke="none" />}
+</svg>

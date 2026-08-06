@@ -1,8 +1,10 @@
-import { getCanvasGeometry, getLocalGeometry } from "./convert";
-import type { XcsProject } from "./convert";
+import {
+    MIN_RING_AREA, boxInside, dedupe, deStair, inRing, pathData, r3, readDesignFile,
+    ringArea, ringBounds, ringPathData, scaleSubpaths, simplifyRing, subBounds
+} from "./design";
+import type { Box, DesignDoc } from "./design";
 import { OPERATION_COLORS } from "./dxf";
 import type { Point, Subpath } from "./dxf";
-import { isXsArchive, parseXs } from "./xs";
 
 // ---------------------------------------------------------------------------
 // Outline tracing: a design → the closed cut line around its items.
@@ -48,32 +50,8 @@ export interface ConnectOptions {
 /** Line width of the exported cut path, in mm. */
 const EXPORT_STROKE = 0.3;
 
-/** Subpaths enclosing less than this are noise, not items or holes (mm²). */
-const MIN_RING_AREA = 0.01;
-
-/** CSS px per millimetre — the 96 dpi every SVG importer falls back to. */
-const PX_PER_MM = 96 / 25.4;
-
-const SVG_NS = "http://www.w3.org/2000/svg";
-
-export interface Box {
-    x0: number;
-    y0: number;
-    x1: number;
-    y1: number;
-}
-
-export interface OutlineDoc {
-    title: string;
-    /** the design's geometry in millimetres, curves flattened to polylines */
-    aSub: Subpath[];
-    /** bounding box size of that geometry, mm */
-    width: number;
-    height: number;
-    /** the source SVG stated no physical size, so 96 dpi was assumed on its units */
-    assumed: boolean;
-    warnings: string[];
-}
+/** A design read for tracing — the shared reader's doc under this tool's name. */
+export type OutlineDoc = DesignDoc;
 
 /** One thing standing on its own in the design — a candidate for tracing. */
 export interface OutlineItem {
@@ -122,201 +100,21 @@ export interface OutlineResult {
     warnings: string[];
 }
 
-// ---------------------------------------------------------------------------
-// Reading the input
-// ---------------------------------------------------------------------------
-
-const UNITS: Record<string, number> = {
-    "": 1, px: 1, pt: 96 / 72, pc: 16, in: 96, cm: 96 / 2.54, mm: PX_PER_MM, q: PX_PER_MM / 4
-};
-
-/** An SVG length in CSS px, or null for percentages and other relative values. */
-const parseLength = (s: string | null): number | null => {
-    const m = /^\s*([+-]?[\d.]+(?:e[+-]?\d+)?)\s*([a-z%]*)\s*$/i.exec(s || "");
-    if (!m) return null;
-    const f = UNITS[m[2]!.toLowerCase()];
-    return f === undefined ? null : parseFloat(m[1]!) * f;
-};
-
-interface SvgDoc {
-    root: SVGSVGElement;
-    /** millimetres per SVG user unit */
-    mmPerUnit: number;
-    /** the authored viewBox in user units */
-    view: { x: number; y: number; w: number; h: number };
-    assumed: boolean;
-}
-
-/**
- * Work out how big an SVG really is. Two things decide it: a viewBox (the unit
- * system the geometry is written in) and the root width/height (that system's
- * physical size). With both, the millimetre scale is exact; with only a viewBox,
- * 96 dpi is assumed — the same guess every importer makes — and the caller is
- * told, so it can offer an override.
- */
-const parseSvgDoc = (sMarkup: string): SvgDoc => {
-    const oParsed = new DOMParser().parseFromString(sMarkup, "image/svg+xml");
-    if (oParsed.querySelector("parsererror") || oParsed.documentElement.tagName.toLowerCase() !== "svg") {
-        throw new Error("This file is not a readable SVG.");
-    }
-    const root = oParsed.documentElement as unknown as SVGSVGElement,
-        aVB = (root.getAttribute("viewBox") || "").trim().split(/[\s,]+/).map(Number),
-        wPx = parseLength(root.getAttribute("width")),
-        hPx = parseLength(root.getAttribute("height"));
-
-    if (aVB.length === 4 && aVB.every(n => isFinite(n)) && aVB[2]! > 0 && aVB[3]! > 0) {
-        const view = { x: aVB[0]!, y: aVB[1]!, w: aVB[2]!, h: aVB[3]! };
-        // Prefer the width: with a non-uniform ratio the height would disagree,
-        // and an importer scales off the width too.
-        if (wPx !== null && wPx > 0) return { root, view, mmPerUnit: wPx / PX_PER_MM / view.w, assumed: false };
-        if (hPx !== null && hPx > 0) return { root, view, mmPerUnit: hPx / PX_PER_MM / view.h, assumed: false };
-        return { root, view, mmPerUnit: 1 / PX_PER_MM, assumed: true };
-    }
-
-    // No viewBox: user units are CSS px, whatever the viewport is sized in.
-    if (wPx !== null && hPx !== null && wPx > 0 && hPx > 0) {
-        return { root, view: { x: 0, y: 0, w: wPx, h: hPx }, mmPerUnit: 1 / PX_PER_MM, assumed: false };
-    }
-    throw new Error("This SVG states neither a viewBox nor a size, so there is nothing to scale it by.");
-};
-
-/**
- * Pull the geometry out of an SVG file in millimetres. The document is mounted
- * off-screen at 1 px per millimetre and read back through the browser's own
- * getCTM(), the same trick the DXF export uses — that way nested transforms,
- * groups and units are the browser's problem, not ours.
- */
-const extractSvgGeometry = (doc: SvgDoc): { aSub: Subpath[]; warnings: string[] } => {
-    const W = doc.view.w * doc.mmPerUnit,
-        H = doc.view.h * doc.mmPerUnit,
-        aWarnings: string[] = [];
-    if (!(W > 0) || !(H > 0)) throw new Error("This SVG has no usable size.");
-
-    const svg = document.createElementNS(SVG_NS, "svg");
-    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-    svg.setAttribute("width", String(W));
-    svg.setAttribute("height", String(H));
-    svg.style.cssText = "position:absolute;left:-100000px;top:0;opacity:0;pointer-events:none";
-
-    // The file's children are re-parented under a scale of mm per user unit; the
-    // root's own width/height/viewBox stay behind, or the geometry would be
-    // transformed twice.
-    const g = document.createElementNS(SVG_NS, "g");
-    g.setAttribute("transform", `scale(${doc.mmPerUnit}) translate(${-doc.view.x}, ${-doc.view.y})`);
-    for (const node of [...doc.root.childNodes]) {
-        const sTag = node.nodeType === 1 ? (node as Element).tagName.toLowerCase() : "";
-        // A <style> from the file would apply to the whole page once mounted, and
-        // a <script> has no business here either. Neither carries geometry.
-        if (sTag === "style" || sTag === "script") continue;
-        g.appendChild(document.importNode(node, true));
-    }
-    svg.appendChild(g);
-    document.body.appendChild(svg);
-
-    const aSub: Subpath[] = [];
-    try {
-        if (svg.querySelector("text")) {
-            aWarnings.push("Text in this SVG was ignored — convert it to paths before tracing, or the outline will miss it.");
-        }
-        svg.querySelectorAll<SVGGraphicsElement>("path,rect,circle,ellipse,line,polygon,polyline,image").forEach(el => {
-            const m = el.getCTM();
-            if (!m) return;
-            getLocalGeometry(el).forEach(sub => {
-                if (sub.points.length < 2) return;
-                aSub.push({
-                    closed: sub.closed,
-                    points: sub.points.map(p => ({
-                        x: m.a * p.x + m.c * p.y + m.e,
-                        y: m.b * p.x + m.d * p.y + m.f
-                    }))
-                });
-            });
-        });
-    } finally {
-        document.body.removeChild(svg);
-    }
-
-    return { aSub, warnings: aWarnings };
-};
-
-const subBounds = (aSub: Subpath[]): Box => {
-    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-    for (const s of aSub) {
-        for (const p of s.points) {
-            if (p.x < x0) x0 = p.x;
-            if (p.x > x1) x1 = p.x;
-            if (p.y < y0) y0 = p.y;
-            if (p.y > y1) y1 = p.y;
-        }
-    }
-    return { x0, y0, x1, y1 };
-};
-
-const ringBounds = (aRing: Point[][]): Box =>
-    subBounds(aRing.map(a => ({ points: a, closed: true })));
-
-const makeDoc = (title: string, aSub: Subpath[], assumed: boolean, warnings: string[]): OutlineDoc => {
-    const b = subBounds(aSub);
-    return { title, aSub, width: b.x1 - b.x0, height: b.y1 - b.y0, assumed, warnings };
-};
-
 /**
  * Read a dropped file into one traceable design per canvas. .xcs/.xs projects go
  * through the same geometry extraction as the DXF export, so the outline is
  * traced around exactly what would be cut.
  */
-export const readOutlineFile = async (file: File): Promise<{ name: string; aDoc: OutlineDoc[] }> => {
-    const buf = await file.arrayBuffer(),
-        name = file.name.replace(/\.[^.]+$/, ""),
-        // Detected by content, not by extension: .xcs is plain JSON, .xs a ZIP.
-        bZip = isXsArchive(buf),
-        sText = bZip ? "" : new TextDecoder().decode(buf);
-
-    if (bZip || sText.trimStart().startsWith("{")) {
-        const oJSON: XcsProject = bZip ? parseXs(buf) : JSON.parse(sText) as XcsProject;
-        if (!Array.isArray(oJSON.canvas)) throw new Error("not an xcs project");
-        const aDoc = oJSON.canvas
-            .map(c => ({ title: c.title.replace("{panel}", "Canvas "), aSub: getCanvasGeometry(oJSON, c) }))
-            .filter(o => o.aSub.length > 0)
-            .map(o => makeDoc(o.title, o.aSub, false, []));
-        if (!aDoc.length) throw new Error("This project has no geometry to trace an outline around.");
-        return { name, aDoc };
-    }
-
-    const doc = parseSvgDoc(sText),
-        { aSub, warnings } = extractSvgGeometry(doc);
-    if (!aSub.length) throw new Error("This SVG holds no geometry to trace an outline around.");
-    return { name, aDoc: [makeDoc("Design", aSub, doc.assumed, warnings)] };
-};
+export const readOutlineFile = (file: File): Promise<{ name: string; aDoc: OutlineDoc[] }> =>
+    readDesignFile(
+        file,
+        "This project has no geometry to trace an outline around.",
+        "This SVG holds no geometry to trace an outline around."
+    );
 
 // ---------------------------------------------------------------------------
 // Finding the items
 // ---------------------------------------------------------------------------
-
-/** Signed-area magnitude of a ring; also weeds out degenerate subpaths. */
-const ringArea = (a: Point[]): number => {
-    let s = 0;
-    for (let i = 0, j = a.length - 1; i < a.length; j = i++) {
-        s += a[j]!.x * a[i]!.y - a[i]!.x * a[j]!.y;
-    }
-    return Math.abs(s) / 2;
-};
-
-/** Even-odd ray cast: is the point inside the ring? */
-const inRing = (p: Point, a: Point[]): boolean => {
-    let bIn = false;
-    for (let i = 0, j = a.length - 1; i < a.length; j = i++) {
-        const pi = a[i]!, pj = a[j]!;
-        if ((pi.y > p.y) !== (pj.y > p.y)
-            && p.x < pi.x + ((p.y - pi.y) / (pj.y - pi.y)) * (pj.x - pi.x)) {
-            bIn = !bIn;
-        }
-    }
-    return bIn;
-};
-
-const boxInside = (a: Box, b: Box): boolean =>
-    a.x0 >= b.x0 && a.x1 <= b.x1 && a.y0 >= b.y0 && a.y1 <= b.y1;
 
 /**
  * Split the design into items and give each one its outer contour.
@@ -545,71 +343,6 @@ const traceContour = (labels: Int32Array, w: number, h: number, oPiece: Piece): 
     } while ((cx !== sx || cy !== sy) && aPts.length < iLimit);
 
     return aPts;
-};
-
-/**
- * Sliding average over the ring, three points wide: enough to take the 1 px
- * staircase off a traced boundary, far too little to round a corner. Not a design
- * knob — the exported contour is meant to be the offset, not a prettier curve.
- */
-const deStair = (aPts: Point[]): Point[] => {
-    const n = aPts.length;
-    if (n < 8) return aPts;
-    return aPts.map((_, i) => {
-        const a = aPts[(i + n - 1) % n]!, b = aPts[i]!, c = aPts[(i + 1) % n]!;
-        return { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3 };
-    });
-};
-
-const distToSegment = (p: Point, a: Point, b: Point): number => {
-    const vx = b.x - a.x,
-        vy = b.y - a.y,
-        len = vx * vx + vy * vy;
-    let t = len ? ((p.x - a.x) * vx + (p.y - a.y) * vy) / len : 0;
-    t = t < 0 ? 0 : t > 1 ? 1 : t;
-    const ex = a.x + t * vx - p.x,
-        ey = a.y + t * vy - p.y;
-    return Math.sqrt(ex * ex + ey * ey);
-};
-
-/** Douglas–Peucker on an open polyline. */
-const simplifyOpen = (aPts: Point[], tol: number): Point[] => {
-    const n = aPts.length;
-    if (n < 3) return aPts.slice();
-    const keep = new Uint8Array(n),
-        aStack: [number, number][] = [[0, n - 1]];
-    keep[0] = 1;
-    keep[n - 1] = 1;
-    while (aStack.length) {
-        const [i, j] = aStack.pop()!;
-        let iFar = -1,
-            dFar = 0;
-        for (let k = i + 1; k < j; k++) {
-            const d = distToSegment(aPts[k]!, aPts[i]!, aPts[j]!);
-            if (d > dFar) { dFar = d; iFar = k; }
-        }
-        if (iFar >= 0 && dFar > tol) {
-            keep[iFar] = 1;
-            aStack.push([i, iFar], [iFar, j]);
-        }
-    }
-    return aPts.filter((_, i) => keep[i]);
-};
-
-/** Douglas–Peucker on a closed ring, cut at its two extremes so it cannot collapse. */
-const simplifyRing = (aPts: Point[], tol: number): Point[] => {
-    const n = aPts.length;
-    if (n < 8) return aPts;
-    const p0 = aPts[0]!;
-    let iFar = 0,
-        dFar = -1;
-    aPts.forEach((p, i) => {
-        const d = (p.x - p0.x) ** 2 + (p.y - p0.y) ** 2;
-        if (d > dFar) { dFar = d; iFar = i; }
-    });
-    const a = simplifyOpen(aPts.slice(0, iFar + 1), tol),
-        b = simplifyOpen([...aPts.slice(iFar), p0], tol);
-    return [...a.slice(0, -1), ...b.slice(0, -1)];
 };
 
 /**
@@ -883,25 +616,8 @@ const offsetRings = (
 // Assembly
 // ---------------------------------------------------------------------------
 
-const r3 = (n: number): string => (Math.round(n * 1000) / 1000).toString();
-
-const pathData = (aPts: Point[], bClose = true): string =>
-    aPts.map((p, i) => `${i ? "L" : "M"}${r3(p.x)} ${r3(p.y)}`).join(" ") + (bClose ? " Z" : "");
-
-const ringPathData = (aRing: Point[][]): string => aRing.map(a => pathData(a)).join(" ");
-
-/** Drop points a curve flattener may have emitted twice. */
-const dedupe = (aPts: Point[]): Point[] =>
-    aPts.filter((p, i) => {
-        const q = aPts[(i + aPts.length - 1) % aPts.length]!;
-        return Math.abs(p.x - q.x) > 1e-4 || Math.abs(p.y - q.y) > 1e-4;
-    });
-
 export const buildOutline = (doc: OutlineDoc, o: OutlineOptions): OutlineResult => {
-    const k = o.scale > 0 ? o.scale : 1,
-        aSub: Subpath[] = k === 1
-            ? doc.aSub
-            : doc.aSub.map(s => ({ closed: s.closed, points: s.points.map(p => ({ x: p.x * k, y: p.y * k })) })),
+    const aSub: Subpath[] = scaleSubpaths(doc.aSub, o.scale > 0 ? o.scale : 1),
         aItem = buildItems(aSub),
         // A design with a single item has nothing to pick, whatever was asked for.
         aSelected = aItem.length < 2 || !o.selection
