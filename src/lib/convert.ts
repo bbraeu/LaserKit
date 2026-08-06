@@ -399,7 +399,9 @@ export const toSVG = (oJSON: XcsProject): ConvertResult<CanvasSvgResult> => {
 // ---------------------------------------------------------------------------
 
 // Extract local (pre-transform) polylines from a rendered SVG geometry element.
-const getLocalGeometry = (el: SVGGraphicsElement): Subpath[] => {
+// Also used by the outline tracer on arbitrary SVG files, hence the shape types
+// an .xcs canvas never produces (circle, polyline).
+export const getLocalGeometry = (el: SVGGraphicsElement): Subpath[] => {
     const f = (a: string): number => parseFloat(el.getAttribute(a) || "") || 0,
         tag = el.tagName.toLowerCase();
 
@@ -413,8 +415,10 @@ const getLocalGeometry = (el: SVGGraphicsElement): Subpath[] => {
                 { x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }
             ], closed: true }];
         }
-        case "ellipse": {
-            const rx = f("rx"), ry = f("ry"),
+        case "ellipse":
+        case "circle": {
+            const r = f("r"),
+                rx = f("rx") || r, ry = f("ry") || r,
                 cx = f("cx"), cy = f("cy"),
                 rMax = Math.max(rx, ry),
                 segs = Math.max(12, Math.ceil((2 * Math.PI) / (2 * Math.acos(Math.max(0, 1 - 0.01 / rMax))))),
@@ -429,11 +433,12 @@ const getLocalGeometry = (el: SVGGraphicsElement): Subpath[] => {
             return [{ points: [
                 { x: f("x1"), y: f("y1") }, { x: f("x2"), y: f("y2") }
             ], closed: false }];
-        case "polygon": {
+        case "polygon":
+        case "polyline": {
             const pts = (el.getAttribute("points") || "").trim().split(/[\s,]+/).map(Number),
                 out: Point[] = [];
             for (let i = 0; i + 1 < pts.length; i += 2) out.push({ x: pts[i]!, y: pts[i + 1]! });
-            return out.length ? [{ points: out, closed: true }] : [];
+            return out.length ? [{ points: out, closed: tag === "polygon" }] : [];
         }
         default:
             return [];
@@ -502,6 +507,13 @@ const extractCanvasGeometry = (oJSON: XcsProject, oCanvas: XcsCanvas, aExcluded:
 
     return aResult;
 };
+
+/**
+ * Every subpath of a canvas in millimetres, operation types dropped — what the
+ * outline tracer needs to find the contour around a design.
+ */
+export const getCanvasGeometry = (oJSON: XcsProject, oCanvas: XcsCanvas): Subpath[] =>
+    extractCanvasGeometry(oJSON, oCanvas, []).flatMap(o => o.subpaths);
 
 const processCanvasDXF = (oJSON: XcsProject, oCanvas: XcsCanvas, aExcluded: string[]): CanvasDxfResult => {
     const aEntities: DxfEntity[] = extractCanvasGeometry(oJSON, oCanvas, aExcluded).flatMap(oGeo => {

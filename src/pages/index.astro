@@ -1,6 +1,6 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import Converter from "../components/Converter";
+import Tools from "../components/Tools";
 import { OPERATION_COLORS } from "../lib/dxf";
 
 const PAYPAL_DONATE_URL = "https://www.paypal.com/donate/?business=TLNAVJR8TMALY&no_recurring=0&currency_code=EUR";
@@ -64,6 +64,11 @@ const steps = [
             with surface engraving, line engraving and cutting preserved as separate operations.
         </p>
 
+        <p class="reveal is-visible mt-4 max-w-2xl text-slate-500" style="--reveal-delay: 200ms">
+            New: trace the <strong class="text-slate-300">outer contour</strong> of any design — SVG, .xcs or .xs — into a
+            single cut line, for the backing plate to glue the original on top of.
+        </p>
+
         <div class="reveal is-visible mt-9 flex flex-wrap items-center justify-center gap-4" style="--reveal-delay: 240ms">
             <a href="#converter"
                class="rounded-xl bg-linear-to-r from-cyan-500 to-violet-500 px-7 py-3.5 font-semibold text-white shadow-xl shadow-violet-500/30 transition hover:brightness-110 active:scale-95">
@@ -95,10 +100,13 @@ const steps = [
         <div class="mx-auto w-[min(72rem,100%)]">
             <div class="reveal text-center">
                 <h2 class="text-3xl font-bold text-white sm:text-4xl">Drop it like it's <span class="text-gradient">hot</span> 🔥</h2>
-                <p class="mx-auto mt-3 max-w-xl text-slate-400">Select an .xcs or .xs project below — every canvas becomes a preview tab with its own DXF download.</p>
+                <p class="mx-auto mt-3 max-w-xl text-slate-400">
+                    Convert an .xcs or .xs project — every canvas becomes a preview tab with its own DXF download — or
+                    trace the outer contour of a design into a cut line.
+                </p>
             </div>
             <div class="reveal mt-10" style="--reveal-delay: 120ms">
-                <Converter client:load />
+                <Tools client:load />
             </div>
         </div>
     </section>
@@ -145,6 +153,8 @@ const steps = [
                 Note: DXF/SVG carry geometry and colours, not laser parameters — assign power &amp; speed per colour once in your laser software.
                 The .fds export pre-assigns the operation per layer; power &amp; speed still come from your material settings.
                 This is a beta-grade tool; heavily skewed shapes may not convert perfectly.
+                The contour tracer works off a high-resolution render of the design, so its cut line is accurate to the
+                tolerance it reports (typically well under 0.1 mm) rather than being an exact curve offset.
             </p>
         </div>
     </section>

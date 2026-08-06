@@ -7,6 +7,7 @@ import type { ProjectMeta, CanvasMeta } from "../lib/meta";
 import { LASERS, getLaser, detectLaser, convertSetting } from "../lib/lasers";
 import { downloadBlob, downloadAsZip, trackEvent } from "../lib/util";
 import { isXsArchive, parseXs } from "../lib/xs";
+import { usePanZoom, ZoomControls, PanHint } from "./PanZoom";
 
 export const FORMATS = {
     dxf: {
@@ -51,13 +52,6 @@ interface ConversionState {
     canvases: CanvasResult[];
     excluded: string[];
     meta: ProjectMeta;
-}
-
-interface ViewBox {
-    x: number;
-    y: number;
-    w: number;
-    h: number;
 }
 
 const fileNameFor = (oCanvas: CanvasResult, fmt: FormatKey): string =>
@@ -391,113 +385,8 @@ export default function Converter() {
         trackEvent("download_zip");
     };
 
-    const previewRef = useRef<HTMLDivElement>(null);
-    const vbRef = useRef<ViewBox | null>(null);   // current viewBox
-    const fitRef = useRef<ViewBox | null>(null);  // fit-to-content viewBox
-
-    const getSvg = (): SVGSVGElement | null => previewRef.current?.querySelector("svg") ?? null;
-
-    const applyVB = (svg: SVGSVGElement, vb: ViewBox): void => {
-        svg.setAttribute("viewBox", `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
-    };
-
-    // Zoom by `factor` around the given client point (container centre if omitted).
-    const zoomBy = useCallback((factor: number, cx?: number, cy?: number) => {
-        const el = previewRef.current, svg = getSvg(), vb = vbRef.current, fit = fitRef.current;
-        if (!el || !svg || !vb || !fit) return;
-        const rect = el.getBoundingClientRect(),
-            px = cx === undefined ? 0.5 : (cx - rect.left) / rect.width,
-            py = cy === undefined ? 0.5 : (cy - rect.top) / rect.height,
-            // clamp: max 60x in, 4x out relative to the fitted view
-            w = Math.min(Math.max(vb.w / factor, fit.w / 60), fit.w * 4),
-            f = vb.w / w,
-            h = vb.h / f;
-        vbRef.current = { x: vb.x + (vb.w - w) * px, y: vb.y + (vb.h - h) * py, w, h };
-        applyVB(svg, vbRef.current);
-    }, []);
-
-    const resetView = useCallback(() => {
-        const svg = getSvg();
-        if (!svg || !fitRef.current) return;
-        vbRef.current = { ...fitRef.current };
-        applyVB(svg, vbRef.current);
-    }, []);
-
-    // Fit the preview to the design bounds (the .xcs work area is a fixed 430 mm
-    // canvas, which would render small designs tiny) and wire up pan & zoom.
-    useEffect(() => {
-        const el = previewRef.current, svg = getSvg();
-        if (!el || !svg) return;
-
-        try {
-            const bb = svg.getBBox(), pad = 5;
-            let x = bb.x - pad, y = bb.y - pad,
-                w = bb.width + pad * 2, h = bb.height + pad * 2;
-            // Expand the box to the container's aspect ratio so pointer positions
-            // map 1:1 onto viewBox coordinates (no letterboxing offsets).
-            const aspect = el.clientWidth / el.clientHeight;
-            if (w / h < aspect) { const nw = h * aspect; x -= (nw - w) / 2; w = nw; }
-            else { const nh = w / aspect; y -= (nh - h) / 2; h = nh; }
-            fitRef.current = { x, y, w, h };
-            vbRef.current = { x, y, w, h };
-            svg.setAttribute("width", "100%");
-            svg.setAttribute("height", "100%");
-            svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-            applyVB(svg, vbRef.current);
-        } catch {
-            return; /* empty canvas — nothing to navigate */
-        }
-
-        // Wheel zoom towards the cursor (non-passive to keep the page from scrolling).
-        const onWheel = (e: WheelEvent): void => {
-            e.preventDefault();
-            zoomBy(e.deltaY < 0 ? 1.2 : 1 / 1.2, e.clientX, e.clientY);
-        };
-        el.addEventListener("wheel", onWheel, { passive: false });
-
-        // Pointer drag pans the view.
-        let dragging = false, lastX = 0, lastY = 0;
-        const onDown = (e: PointerEvent): void => {
-            dragging = true;
-            lastX = e.clientX;
-            lastY = e.clientY;
-            el.setPointerCapture(e.pointerId);
-            el.style.cursor = "grabbing";
-        };
-        const onMove = (e: PointerEvent): void => {
-            const vb = vbRef.current, s = getSvg();
-            if (!dragging || !vb || !s) return;
-            const rect = el.getBoundingClientRect();
-            vbRef.current = {
-                ...vb,
-                x: vb.x - (e.clientX - lastX) * (vb.w / rect.width),
-                y: vb.y - (e.clientY - lastY) * (vb.h / rect.height)
-            };
-            lastX = e.clientX;
-            lastY = e.clientY;
-            applyVB(s, vbRef.current);
-        };
-        const onUp = (e: PointerEvent): void => {
-            dragging = false;
-            el.style.cursor = "";
-            if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
-        };
-        const onDblClick = (): void => resetView();
-        el.addEventListener("pointerdown", onDown);
-        el.addEventListener("pointermove", onMove);
-        el.addEventListener("pointerup", onUp);
-        el.addEventListener("pointercancel", onUp);
-        el.addEventListener("dblclick", onDblClick);
-
-        return () => {
-            el.removeEventListener("wheel", onWheel);
-            el.removeEventListener("pointerdown", onDown);
-            el.removeEventListener("pointermove", onMove);
-            el.removeEventListener("pointerup", onUp);
-            el.removeEventListener("pointercancel", onUp);
-            el.removeEventListener("dblclick", onDblClick);
-        };
-    }, [state, tab, zoomBy, resetView]);
+    // Refit only for a new file or canvas, not for anything else that re-renders.
+    const { ref: previewRef, zoomBy, resetView } = usePanZoom(active?.preview, `${state?.sourceName}|${tab}`);
 
     return (
         <div className="mx-auto w-full max-w-3xl">
@@ -656,17 +545,8 @@ export default function Converter() {
                                     className="preview-grid h-120 cursor-grab touch-none overflow-hidden rounded-xl ring-1 ring-white/10 select-none"
                                     dangerouslySetInnerHTML={{ __html: active.preview }}
                                 />
-                                <div className="absolute top-3 right-3 flex flex-col overflow-hidden rounded-lg bg-slate-900/80 ring-1 ring-white/15 backdrop-blur">
-                                    <button aria-label="Zoom in" onClick={() => zoomBy(1.4)}
-                                        className="px-3 py-2 text-slate-200 transition hover:bg-white/10 hover:text-white">+</button>
-                                    <button aria-label="Zoom out" onClick={() => zoomBy(1 / 1.4)}
-                                        className="border-y border-white/10 px-3 py-2 text-slate-200 transition hover:bg-white/10 hover:text-white">−</button>
-                                    <button aria-label="Reset view" title="Fit to design" onClick={resetView}
-                                        className="px-3 py-2 text-slate-200 transition hover:bg-white/10 hover:text-white">⛶</button>
-                                </div>
-                                <p className="pointer-events-none absolute bottom-2 left-3 rounded-md bg-slate-900/70 px-2.5 py-1 text-[11px] text-slate-300 backdrop-blur">
-                                    scroll to zoom · drag to pan · double-click to reset
-                                </p>
+                                <ZoomControls zoomBy={zoomBy} resetView={resetView} />
+                                <PanHint />
                             </div>
 
                             {active.rasters > 0 && (

@@ -40,6 +40,35 @@ rather than handing out a file with the picture silently missing. In the preview
 "yellow = bitmap engraving" like every other shape; the exported pixels are left
 untouched, since laser software maps an image's luminance to laser power.
 
+## Outer contour
+
+The second tool in the app traces the **cut line around a design** — for the
+backing plate you glue the original on top of. It takes an `.svg` or the same
+`.xcs` / `.xs` projects, and the geometry comes from the very same extraction the
+DXF export uses, so the outline is traced around exactly what would be cut.
+
+- A design is split into **items**: every subpath is treated as a ring, and a ring
+  is an item when no other ring contains it. Holes and inner detail therefore drop
+  out by themselves, and things standing side by side come out as separate items —
+  trace all of them, or switch to *individual* and click the ones you want.
+- **Border 0 mm is exact**: the item's outermost path *is* the cut line, at the
+  0.01 mm the curve flattener works to. Give it a border and the offset is
+  computed on a fine grid instead (the reported accuracy, typically 0.03 mm),
+  because offsetting a polygon outwards means resolving the self-intersections it
+  creates at every concave corner.
+- **Connecting** several items into one plate: *shrink-wrap* closes the mask with
+  the reach the gaps need, so one smooth outline sweeps from item to item and hugs
+  each; *bridges* adds a 4 mm neck along the shortest route, filleted where it
+  meets an item; *taut band* is the convex hull. The automatic reach opens up until
+  the selection really is one piece — closing bridges two parallel edges at half
+  their gap, but pinches back apart between round or pointy shapes.
+- Two exports: the cut line alone, or the cut line in red together with the traced
+  design in black.
+
+An SVG that states no physical size is read at 96 dpi (what every importer
+assumes) and the width can be corrected in the panel; `.xcs` coordinates are
+millimetres already.
+
 ## Project settings
 
 What a DXF/SVG/FDS cannot carry is shown under the preview instead: machine and
@@ -81,6 +110,11 @@ versions store just the numeric id from their online catalogue, so `Material
   `[u32 LE length][u32 BE raw size][zlib]` (Qt `qCompress`) holding JSON with
   QPainterPath-style geometry. Operation modes: 0 = surface engraving,
   1 = line engraving, 2 = line cutting (air assist on).
+
+- **Outline** (`src/lib/outline.ts`): items from ring containment, the border and
+  every grid-based connection from an exact Euclidean distance transform
+  (Felzenszwalb & Huttenlocher) over a filled bitmap, and marching squares to walk
+  the result back out to a polyline.
 
 ## Stack
 
