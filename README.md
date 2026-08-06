@@ -24,13 +24,35 @@ maintained by [bbraeu](https://github.com/bbraeu).
 | --- | --- | --- |
 | **DXF** (default) | colour-coded (ACI) | AutoCAD R2000, single layer, read by LightBurn / Fusion / any CAM tool |
 | **FDS** | natively assigned layers | Falcon Design Space project — engrave & cut modes pre-assigned on import |
-| **SVG** | colour-coded strokes/fills | Exactly what the preview shows — the only output that carries raster images |
+| **SVG** | colour-coded strokes/fills | The only output that carries raster images |
+
+All three carry real-world millimetres: the DXF declares `$INSUNITS = 4`, `.fds`
+coordinates are mm natively, and the SVG states `width="430mm" height="390mm"`
+alongside its `viewBox` — without a physical size an importer applies 96 dpi to
+the user units and the design lands 3.78× too small.
 
 Raster images (`BITMAP` displays) are embedded in the SVG output at their placed
 size. DXF and FDS can only store vector geometry — DXF's only raster entity is a
 reference to an external file, and an `.fds` shape is a QPainterPath outline — so
 for a canvas containing an image those two formats are not offered at all,
-rather than handing out a file with the picture silently missing.
+rather than handing out a file with the picture silently missing. In the preview
+(and only there) a raster is tinted to its operation colour, so it reads as
+"yellow = bitmap engraving" like every other shape; the exported pixels are left
+untouched, since laser software maps an image's luminance to laser power.
+
+## Project settings
+
+What a DXF/SVG/FDS cannot carry is shown under the preview instead: machine and
+laser module, material slot with thickness and focal length, air-assist and
+purifier gears, the material's precaution codes, and a per-operation table of
+power / speed / passes / density — the numbers to re-enter as cut settings after
+importing. A dropdown converts that table for another laser module (diode, IR,
+CO₂) by holding the energy delivered per millimetre constant; see
+`src/lib/lasers.ts` for the arithmetic and its limits.
+
+Material names are only shown when the project embeds them: current xTool
+versions store just the numeric id from their online catalogue, so `Material
+#1125` is what the file actually says.
 
 ## How it works
 
@@ -42,8 +64,9 @@ rather than handing out a file with the picture silently missing.
   `vectors/<bucket>/data-<n>.json` (deduplicated `dPath` strings referenced via
   `vectorRef`), `resources/<hash>.<ext>` (raster images referenced via
   `resourcePath`, where v1 embedded a base64 data URL inline),
-  `profiles.json` (profile → `processingType`) and
-  `devices/device-<id>.json` (bindings: profile → display ids).
+  `profiles.json` (profile → `processingType` plus its parameter `values`) and
+  `devices/device-<id>.json` (bindings: profile → display ids, and the `patches`
+  that override a profile's values per material preset).
   `src/lib/xs.ts` reassembles them into the `.xcs` shape — inlining vectors and
   re-encoding referenced rasters as data URLs — so the rest of the pipeline is
   shared.

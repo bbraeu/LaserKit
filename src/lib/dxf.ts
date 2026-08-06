@@ -46,7 +46,8 @@ export const OPERATION_COLORS: Record<string, Operation> = {
     BITMAP_ENGRAVING:      { name: "Bitmap Engraving",  color: 2, css: "#c0a000" }  // yellow
 };
 
-const DEFAULT_OPERATION: Operation = { name: "Other", color: 7, css: "#000000" }; // black
+/** Fallback for shapes with no processing type — deliberately identity-comparable. */
+export const DEFAULT_OPERATION: Operation = { name: "Other", color: 7, css: "#000000" }; // black
 
 export const getOperationFor = (processingType: string | undefined): Operation =>
     (processingType && OPERATION_COLORS[processingType]) || DEFAULT_OPERATION;

@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toSVG, toDXF, toFDS, getUsedOperations } from "../lib/convert";
 import type { XcsProject } from "../lib/convert";
 import type { Operation } from "../lib/dxf";
+import { getProjectMeta, getCanvasMeta } from "../lib/meta";
+import type { ProjectMeta, CanvasMeta } from "../lib/meta";
+import { LASERS, getLaser, detectLaser, convertSetting } from "../lib/lasers";
 import { downloadBlob, downloadAsZip, trackEvent } from "../lib/util";
 import { isXsArchive, parseXs } from "../lib/xs";
 
@@ -22,7 +25,7 @@ export const FORMATS = {
         ext: "svg",
         label: "SVG",
         note: "vector",
-        desc: "Colour-coded vector graphic, exactly what the preview shows"
+        desc: "Colour-coded vector graphic — images keep their original pixels"
     }
 } as const;
 
@@ -31,18 +34,23 @@ type FormatKey = keyof typeof FORMATS;
 interface CanvasResult {
     title: string;
     svg: string;
+    /** on-screen variant: rasters tinted to their operation colour */
+    preview: string;
     dxf: string;
     fds: Blob;
     baseName: string;
     operations: Operation[];
     /** raster images on this canvas — only SVG can carry them (see note below) */
     rasters: number;
+    /** material and laser settings, shown below the preview */
+    meta: CanvasMeta;
 }
 
 interface ConversionState {
     sourceName: string;
     canvases: CanvasResult[];
     excluded: string[];
+    meta: ProjectMeta;
 }
 
 interface ViewBox {
@@ -72,6 +80,201 @@ const carriesRaster = (fmt: FormatKey): boolean => fmt === "svg";
 /** The format to actually export in — falls back to SVG when rasters are involved. */
 const usableFormat = (fmt: FormatKey, bHasRaster: boolean): FormatKey =>
     bHasRaster && !carriesRaster(fmt) ? "svg" : fmt;
+
+const withUnit = (n: number | undefined, sUnit: string): string =>
+    n === undefined ? "—" : `${n}${sUnit}`;
+
+const SELECT_CLASS = "rounded-lg border border-white/15 bg-slate-900 px-2 py-1 text-slate-200 outline-none transition hover:border-cyan-400/50 focus-visible:border-cyan-400/60";
+
+// The machine setup and the laser parameters behind each operation. They cannot
+// travel inside a DXF/SVG/FDS file, so they are listed here for re-entering as
+// cut settings after the import — optionally converted to another laser module.
+function SettingsPanel({ oProject, oCanvas }: { oProject: ProjectMeta; oCanvas: CanvasMeta }) {
+    // Seeded from the module the project was saved for, but editable: files older
+    // than ~1.5 do not record it, and a project may have been set up on a machine
+    // other than the one that saved it.
+    const [source, setSource] = useState(() => detectLaser(oProject.sourceWatt, oProject.sourceKind));
+    const [target, setTarget] = useState("");
+
+    const oSource = getLaser(source),
+        oTarget = getLaser(target),
+        bConvert = !!(oSource && oTarget),
+        // A different wavelength interacts with the material in a way no amount of
+        // arithmetic covers, so it is called out rather than quietly converted.
+        bCrossWave = bConvert && oSource!.wavelength !== oTarget!.wavelength;
+
+    const aInfo = ([
+        { label: "Machine", value: oProject.device },
+        { label: "Laser", value: oProject.power },
+        { label: "Material", value: oCanvas.material },
+        { label: "Thickness", value: oCanvas.thickness },
+        { label: "Focus", value: oCanvas.focalLength },
+        { label: "Air assist", value: oCanvas.airAssist },
+        { label: "Purifier", value: oCanvas.purifier },
+        { label: "Saved with", value: oProject.app },
+        { label: "Last modified", value: oProject.modified }
+    ] as { label: string; value?: string }[]).filter((o): o is { label: string; value: string } => !!o.value);
+
+    // A project saved without a device carries none of this — skip the empty box.
+    if (!aInfo.length && !oCanvas.settings.length) return null;
+
+    return (
+        <details className="group mt-4 rounded-xl border border-white/10 bg-white/[0.03]">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm [&::-webkit-details-marker]:hidden">
+                <svg className="size-4 shrink-0 text-slate-400 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                </svg>
+                <span className="font-medium text-white">xTool project settings</span>
+                <span className="truncate text-xs text-slate-400">
+                    {[oProject.device, oProject.power, oCanvas.material, oCanvas.thickness].filter(Boolean).join(" · ")}
+                </span>
+            </summary>
+
+            <div className="space-y-4 border-t border-white/10 px-4 py-4">
+                <div className="flex gap-4">
+                    {oProject.cover && (
+                        <img src={oProject.cover} alt="Project thumbnail as saved by xTool"
+                            className="size-16 shrink-0 rounded-lg bg-white/5 object-contain ring-1 ring-white/10" />
+                    )}
+                    <dl className="grid flex-1 grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
+                        {aInfo.map(o => (
+                            <div key={o.label}>
+                                <dt className="text-[11px] tracking-wide text-slate-500 uppercase">{o.label}</dt>
+                                <dd className="truncate text-sm text-slate-200" title={o.value}>{o.value}</dd>
+                            </div>
+                        ))}
+                    </dl>
+                </div>
+
+                {oCanvas.settings.length > 0 && (
+                    <>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                            <span>Convert from</span>
+                            <select aria-label="Laser the project was made for" value={source} className={SELECT_CLASS}
+                                onChange={e => setSource(e.target.value)}>
+                                <option value="">unknown</option>
+                                {LASERS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                            </select>
+                            {oProject.sourceAssumed && source && (
+                                <span className="text-amber-300/70" title={`${oProject.device} projects do not always store the module wattage — this is the model's stock laser`}>
+                                    (assumed for {oProject.device})
+                                </span>
+                            )}
+                            <span>to</span>
+                            <select aria-label="Laser to convert the settings for" value={target} className={SELECT_CLASS}
+                                onChange={e => {
+                                    setTarget(e.target.value);
+                                    if (e.target.value) trackEvent("convert_laser");
+                                }}>
+                                <option value="">— off —</option>
+                                {LASERS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                            </select>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-xs">
+                                <thead>
+                                    <tr className="border-b border-white/10 text-[11px] tracking-wide text-slate-500 uppercase">
+                                        <th className="py-2 pr-4 font-medium">Operation</th>
+                                        <th className="py-2 pr-4 font-medium">Power</th>
+                                        <th className="py-2 pr-4 font-medium">Speed</th>
+                                        <th className="py-2 pr-4 font-medium">Passes</th>
+                                        <th className="py-2 pr-4 font-medium">Density</th>
+                                        <th className="py-2 pr-4 font-medium">Shapes</th>
+                                        {bConvert && (
+                                            <th className="py-2 font-medium whitespace-nowrap text-cyan-300/80">→ {oTarget!.label}</th>
+                                        )}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {oCanvas.settings.map(o => {
+                                        const oNew = bConvert ? convertSetting(o, oSource!, oTarget!) : undefined;
+                                        return (
+                                            <tr key={`${o.operation.name}|${o.power}|${o.speed}|${o.passes}|${o.density}`}
+                                                className="border-b border-white/5 last:border-0">
+                                                <td className="py-2 pr-4">
+                                                    <span className="flex items-center gap-2 whitespace-nowrap text-slate-200">
+                                                        <span className="size-2.5 shrink-0 rounded-full" style={{ background: o.operation.css }} aria-hidden="true" />
+                                                        {o.operation.name}
+                                                        {o.preset && (
+                                                            <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-slate-400" title="Values from an xTool material preset">
+                                                                preset
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                    {o.notes.length > 0 && (
+                                                        <span className="mt-0.5 block pl-4.5 text-[11px] text-slate-500">{o.notes.join(" · ")}</span>
+                                                    )}
+                                                </td>
+                                                <td className="py-2 pr-4 text-slate-300 tabular-nums">{withUnit(o.power, " %")}</td>
+                                                <td className="py-2 pr-4 whitespace-nowrap text-slate-300 tabular-nums">{withUnit(o.speed, " mm/s")}</td>
+                                                <td className="py-2 pr-4 text-slate-300 tabular-nums">{withUnit(o.passes, "×")}</td>
+                                                <td className="py-2 pr-4 text-slate-300 tabular-nums">{withUnit(o.density, "")}</td>
+                                                <td className="py-2 pr-4 text-slate-400 tabular-nums">{o.shapes}</td>
+                                                {bConvert && (
+                                                    <td className="py-2 whitespace-nowrap tabular-nums">
+                                                        {oNew ? (
+                                                            <span className={oNew.flatOut ? "text-amber-200" : "text-cyan-200"}
+                                                                title={oNew.flatOut ? `A ${oTarget!.label} cannot reach the source's power — full power at a lower speed instead` : undefined}>
+                                                                {oNew.power} % · {oNew.speed} mm/s{oNew.passes > 1 ? ` · ${oNew.passes}×` : ""}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-slate-500">—</span>
+                                                        )}
+                                                    </td>
+                                                )}
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {target && !source && (
+                            <p className="text-[11px] text-amber-300/80">
+                                This project does not say which laser module the percentages refer to — pick the source
+                                laser above to convert them.
+                            </p>
+                        )}
+
+                        {bConvert && (
+                            <p className="text-[11px] leading-relaxed text-slate-500">
+                                Converted to keep the energy per millimetre equal: speed is held where the target can
+                                supply the power, otherwise it runs at 100 % and slower, adding passes below 2 mm/s
+                                (amber). Density and dithering are unchanged. Arithmetic only — lens, spot size and air
+                                assist all shift the result, so treat it as the centre of a test grid.
+                                {bCrossWave && (
+                                    <span className="mt-1 block text-amber-300/80">
+                                        {oSource!.wavelength} nm → {oTarget!.wavelength} nm: a different wavelength is
+                                        absorbed completely differently — IR will not cut wood, CO₂ will not mark bare
+                                        metal. The numbers are a starting point at best.
+                                    </span>
+                                )}
+                            </p>
+                        )}
+                    </>
+                )}
+
+                {oCanvas.precautions.length > 0 && (
+                    <ul className="flex flex-wrap gap-2" aria-label="Material precautions">
+                        {oCanvas.precautions.map(s => (
+                            <li key={s} className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-200/90">
+                                {s}
+                            </li>
+                        ))}
+                    </ul>
+                )}
+
+                {oCanvas.material?.startsWith("Material #") && (
+                    <p className="text-[11px] text-slate-500">
+                        Current xTool versions store only the catalogue id of the material, not its name — the id is
+                        shown as saved.
+                    </p>
+                )}
+            </div>
+        </details>
+    );
+}
 
 export default function Converter() {
     const [state, setState] = useState<ConversionState | null>(null);
@@ -106,14 +309,17 @@ export default function Converter() {
             setState({
                 sourceName: file.name,
                 excluded: [...new Set(oSvg.aExcluded)],
+                meta: getProjectMeta(oJSON),
                 canvases: oSvg.aCanvas.map((oCanvas, i) => ({
                     title: oCanvas.title,
                     svg: oCanvas.svg,
+                    preview: oCanvas.preview,
                     dxf: oDxf.aCanvas[i]!.dxf,
                     fds: oFds.aCanvas[i]!.fds,
                     baseName: file.name.replace(/\.(xcs|xs)$/i, ""),
                     operations: getUsedOperations(oJSON, oJSON.canvas[i]!),
-                    rasters: oJSON.canvas[i]!.displays.filter(d => d.type === "BITMAP").length
+                    rasters: oJSON.canvas[i]!.displays.filter(d => d.type === "BITMAP").length,
+                    meta: getCanvasMeta(oJSON, oJSON.canvas[i]!)
                 }))
             });
             setTab(0);
@@ -448,7 +654,7 @@ export default function Converter() {
                                 <div
                                     ref={previewRef}
                                     className="preview-grid h-120 cursor-grab touch-none overflow-hidden rounded-xl ring-1 ring-white/10 select-none"
-                                    dangerouslySetInnerHTML={{ __html: active.svg }}
+                                    dangerouslySetInnerHTML={{ __html: active.preview }}
                                 />
                                 <div className="absolute top-3 right-3 flex flex-col overflow-hidden rounded-lg bg-slate-900/80 ring-1 ring-white/15 backdrop-blur">
                                     <button aria-label="Zoom in" onClick={() => zoomBy(1.4)}
@@ -476,6 +682,9 @@ export default function Converter() {
                                     Skipped unsupported shape types: {state.excluded.join(", ")}
                                 </p>
                             )}
+
+                            {/* keyed on the file: a new project must re-detect its source laser */}
+                            <SettingsPanel key={state.sourceName} oProject={state.meta} oCanvas={active.meta} />
                         </div>
                     )}
                 </div>

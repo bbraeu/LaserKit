@@ -1,4 +1,4 @@
-import { parsePathToPolylines, getOperationFor, buildDxf } from "./dxf";
+import { parsePathToPolylines, getOperationFor, buildDxf, DEFAULT_OPERATION } from "./dxf";
 import type { Point, Subpath, DxfEntity, Operation } from "./dxf";
 import { buildFds, getFdsModeFor } from "./fds";
 
@@ -46,18 +46,79 @@ export interface XcsCanvas {
     displays: XcsDisplay[];
 }
 
-interface XcsDeviceDisplayConfig {
-    processingType?: string;
+/** Laser parameters of one operation. Power is %, speed mm/s, repeat = passes. */
+export interface XcsParameters {
+    power?: number;
+    speed?: number;
+    repeat?: number;
+    density?: number;
+    bitmapMode?: string;
+    /** module the values were tuned for: "blue", "ir", … */
+    processingLightSource?: string;
+    /** newer files name the exact module, e.g. "laser_blue_10W" */
+    laser?: string;
+    enableOverCut?: boolean;
+    overCutDistance?: number;
+    enableKerf?: boolean;
+    kerfDistance?: number;
 }
 
-interface XcsDeviceCanvasEntry {
+export interface XcsProcessingConfig {
+    /** which parameter set is in effect: "official" (xTool preset) or "customize" */
+    materialType?: string;
+    planType?: string;
+    parameter?: Record<string, XcsParameters>;
+}
+
+export interface XcsDeviceDisplayConfig {
+    processingType?: string;
+    /** parameters per processing type — only the active one is meaningful */
+    data?: Record<string, XcsProcessingConfig>;
+}
+
+/** Work-area setup of one canvas: material slot, focus and accessory settings. */
+export interface XcsModeData {
+    /** id in xTool's online material catalogue — 0 when nothing is selected */
+    material?: number;
+    thickness?: number | null;
+    focalLength?: number;
+    fanGear?: number;
+    purifierGear?: number;
+    purifierV3Gear?: number;
+    /** names of the fields above that this project actually uses */
+    xcsUsed?: string[];
+    precautionCodes?: string[];
+}
+
+export interface XcsDeviceCanvasEntry {
     mode?: string;
+    data?: Record<string, XcsModeData>;
     displays?: { value?: [string, XcsDeviceDisplayConfig][] };
+}
+
+/** Material catalogue record — embedded by older app versions only. */
+export interface XcsMaterial {
+    id: number;
+    name?: Record<string, string> | string;
+    categoryName?: string;
 }
 
 export interface XcsProject {
     canvas: XcsCanvas[];
+    /** machine model the project was set up for, e.g. "S1", "D1Pro" */
+    extId?: string;
+    extName?: string;
+    /** version of the app that saved the project */
+    version?: string;
+    created?: number;
+    modify?: number;
+    ua?: string;
+    /** project thumbnail as a data URL */
+    cover?: string;
     device?: {
+        /** laser module wattage — a bare number in older files, a list in newer ones */
+        power?: number | number[];
+        materialList?: XcsMaterial[];
         data?: { value?: [string, XcsDeviceCanvasEntry][] };
     };
 }
@@ -66,6 +127,8 @@ export interface CanvasSvgResult {
     big: boolean;
     title: string;
     svg: string;
+    /** the same drawing with rasters tinted to their operation colour — screen only */
+    preview: string;
 }
 
 export interface CanvasDxfResult {
@@ -134,7 +197,26 @@ const getMatrix = (o: XcsDisplay): [number, number, number, number] => {
     ];
 };
 
-type ShapeBuilder = (o: XcsDisplay, sColor: string) => string;
+// A raster cannot be recoloured the way a stroke can, so in the preview it is
+// pushed through a luminance→colour matrix instead: white maps to the operation
+// colour, black stays black. The picture stays readable and still reads as
+// "yellow = bitmap engraving" like every other shape on the canvas.
+const LUMA = [0.2126, 0.7152, 0.0722];
+
+const getTintId = (sColor: string): string => `tint-${sColor.replace("#", "")}`;
+
+const buildTintFilter = (sColor: string): string => {
+    // One matrix row per channel: the operation's channel value times the
+    // luminance weights, so the image collapses to a ramp of that one colour.
+    const row = (i: number): string => {
+        const f = parseInt(sColor.slice(1 + i * 2, 3 + i * 2), 16) / 255;
+        return LUMA.map(w => +(w * f).toFixed(4)).join(" ") + " 0 0";
+    };
+    return `<filter id="${getTintId(sColor)}" color-interpolation-filters="sRGB">`
+        + `<feColorMatrix type="matrix" values="${row(0)} ${row(1)} ${row(2)} 0 0 0 1 0"/></filter>`;
+};
+
+type ShapeBuilder = (o: XcsDisplay, sColor: string, bTint?: boolean) => string;
 
 const builders: Record<string, ShapeBuilder> = {
     PATH: (o, sColor) => {
@@ -209,9 +291,15 @@ const builders: Record<string, ShapeBuilder> = {
     // raster is stretched to that box — preserveAspectRatio="none" keeps it filling
     // the box even when the user scaled it non-uniformly. Omit href when the raster
     // is missing so the box still contributes geometry instead of a broken image.
-    BITMAP: o => {
-        const sHref = o.base64 ? `href="${o.base64}" ` : "";
-        return `<image ${getId(o)}${sHref}x="${o.x}" y="${o.y}" width="${o.width}" height="${o.height}" preserveAspectRatio="none" transform="${getTransform(o, false, true, false)}" />`;
+    BITMAP: (o, sColor, bTint) => {
+        const sHref = o.base64 ? `href="${o.base64}" ` : "",
+            // Only ever set for the preview: the filter lives in that SVG's
+            // <defs>, and referencing a filter that is not there stops the
+            // element from rendering at all. The exported SVG keeps the original
+            // pixels — a tinted photo would engrave differently, since laser
+            // software maps the image's luminance to laser power.
+            sFilter = bTint ? `filter="url(#${getTintId(sColor)})" ` : "";
+        return `<image ${getId(o)}${sHref}${sFilter}x="${o.x}" y="${o.y}" width="${o.width}" height="${o.height}" preserveAspectRatio="none" transform="${getTransform(o, false, true, false)}" />`;
     }
 };
 
@@ -219,7 +307,7 @@ const builders: Record<string, ShapeBuilder> = {
 // Canvas processing
 // ---------------------------------------------------------------------------
 
-const getDeviceEntry = (oJSON: XcsProject, sCanvasId: string): XcsDeviceCanvasEntry | undefined =>
+export const getDeviceEntry = (oJSON: XcsProject, sCanvasId: string): XcsDeviceCanvasEntry | undefined =>
     oJSON.device?.data?.value?.find(a => a[0] === sCanvasId)?.[1];
 
 // Build displayId -> processingType map for a canvas. The operation type
@@ -248,6 +336,8 @@ export const getUsedOperations = (oJSON: XcsProject, oCanvas: XcsCanvas): Operat
 
 const processCanvas = (oJSON: XcsProject, oCanvas: XcsCanvas, aExcluded: string[]): CanvasSvgResult => {
     const aOutput: string[] = [],
+        aPreview: string[] = [],
+        aTints = new Set<string>(),
         oPTMap = getProcessingTypeMap(oJSON, oCanvas),
         bBig = isBigCanvas(oJSON, oCanvas);
 
@@ -255,17 +345,39 @@ const processCanvas = (oJSON: XcsProject, oCanvas: XcsCanvas, aExcluded: string[
     // engraving / line engraving / cutting the same way the DXF does.
     oCanvas.displays.forEach(oDisplay => {
         const fnConvert = builders[oDisplay.type];
-        if (fnConvert) {
-            aOutput.push(fnConvert(oDisplay, getOperationFor(oPTMap.get(oDisplay.id)).css));
-        } else {
+        if (!fnConvert) {
             aExcluded.push(oDisplay.type);
+            return;
+        }
+        const oOperation = getOperationFor(oPTMap.get(oDisplay.id)),
+            sShape = fnConvert(oDisplay, oOperation.css);
+
+        aOutput.push(sShape);
+        // Tint rasters on screen only — and never with the "Other" fallback,
+        // which is black and would leave the image invisible.
+        if (oDisplay.type === "BITMAP" && oOperation !== DEFAULT_OPERATION) {
+            aTints.add(oOperation.css);
+            aPreview.push(fnConvert(oDisplay, oOperation.css, true));
+        } else {
+            aPreview.push(sShape);
         }
     });
+
+    const iHeight = bBig ? 930 : 390,
+        sViewBox = `viewBox="0 0 430 ${iHeight}" xmlns="http://www.w3.org/2000/svg"`,
+        sDefs = aTints.size ? `<defs>${[...aTints].map(buildTintFilter).join("")}</defs>` : "";
 
     return {
         big: bBig,
         title: oCanvas.title.replace("{panel}", "Canvas "),
-        svg: `<svg viewBox="0 0 430 ${bBig ? 930 : 390}" xmlns="http://www.w3.org/2000/svg">${aOutput.join("")}</svg>`
+        // The export states its physical size: an SVG carrying only a viewBox has
+        // no real-world scale, so importers fall back to 96 dpi on the user units
+        // and the design arrives 25.4/96 = 3.78× too small. With width/height in
+        // millimetres one user unit is one millimetre, as the xcs coordinates are.
+        svg: `<svg width="430mm" height="${iHeight}mm" ${sViewBox}>${aOutput.join("")}</svg>`,
+        // On screen the box comes from the container instead, so the preview is
+        // left unsized — and it is the only variant carrying the raster tints.
+        preview: `<svg ${sViewBox}>${sDefs}${aPreview.join("")}</svg>`
     };
 };
 

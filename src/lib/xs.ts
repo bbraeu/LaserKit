@@ -1,5 +1,8 @@
 import { unzipSync, strFromU8 } from "fflate";
-import type { XcsProject, XcsCanvas, XcsDisplay } from "./convert";
+import type {
+    XcsProject, XcsCanvas, XcsDisplay, XcsDeviceCanvasEntry, XcsDeviceDisplayConfig,
+    XcsModeData, XcsParameters
+} from "./convert";
 
 // ---------------------------------------------------------------------------
 // .xs project files (xTool Studio, "xcs-workspace-v2")
@@ -13,9 +16,10 @@ import type { XcsProject, XcsCanvas, XcsDisplay } from "./convert";
 //                                         strings) referenced via vectorRef
 //   resources/<hash>.<ext>                raster images, referenced by a
 //                                         display's resourcePath
-//   profiles.json                         profileId -> processingType
+//   profiles.json                         profileId -> processingType, values
 //   devices/device-<id>.json              processing[canvasId].modes[mode]
 //                                         .bindings: profile -> displayIds
+//                                         .patches:  parameter overrides
 //
 // This module reassembles those parts into the v1 XcsProject shape so the
 // whole SVG/DXF/FDS pipeline works unchanged.
@@ -23,6 +27,11 @@ import type { XcsProject, XcsCanvas, XcsDisplay } from "./convert";
 
 interface XsProjectJson {
     activeDeviceId?: string;
+    created?: number;
+    modify?: number;
+    /** archive path of the cover image, e.g. "resources/project-cover.png" */
+    cover?: string;
+    versionInfo?: { appVersion?: string; ua?: string; savedAt?: number };
     modules?: { canvases?: string[]; devices?: string[] };
 }
 
@@ -41,18 +50,34 @@ interface XsVectorRef {
 interface XsBinding {
     baseProfileId?: string;
     displayIds?: string[];
+    patchIds?: string[];
+}
+
+/** Parameter overrides layered on top of a profile, usually by a material preset. */
+interface XsPatch {
+    material?: { materialType?: string };
+    overrides?: XcsParameters;
 }
 
 interface XsDeviceJson {
+    extId?: string;
+    extName?: string;
+    power?: number | number[];
     processing?: Record<string, {
         activeMode?: string;
-        modes?: Record<string, { bindings?: XsBinding[] }>;
+        modes?: Record<string, {
+            data?: XcsModeData;
+            bindings?: XsBinding[];
+            patches?: Record<string, XsPatch>;
+        }>;
     }>;
 }
 
 interface XsProfilesJson {
-    profiles?: Record<string, { processingType?: string }>;
+    profiles?: Record<string, { processingType?: string; values?: XcsParameters }>;
 }
+
+type XsProfiles = NonNullable<XsProfilesJson["profiles"]>;
 
 /** True if the buffer starts with the ZIP magic ("PK") — i.e. a .xs project. */
 export const isXsArchive = (buf: ArrayBuffer): boolean => {
@@ -173,35 +198,56 @@ const loadCanvas = (
     return { id: sCanvasId, title: oMeta.title || "Canvas", displays: aDisplays };
 };
 
-// Rebuild the v1 device map (canvasId -> displayId -> processingType) from the
-// v2 bindings: each binding ties a profile (which owns the processingType) to
-// a list of display ids.
+// A binding's laser parameters are its profile's values with every referenced
+// patch applied in order (last one wins) — the same layering Studio does when a
+// material preset is dropped onto a profile. Rebuilt into the v1 nesting
+// (data[processingType].parameter[materialType]) so meta.ts reads one shape.
+const buildDisplayConfig = (
+    oBinding: XsBinding,
+    oProfiles: XsProfiles,
+    oPatches: Record<string, XsPatch>
+): XcsDeviceDisplayConfig => {
+    const oProfile = oBinding.baseProfileId ? oProfiles[oBinding.baseProfileId] : undefined,
+        sType = oProfile?.processingType;
+    if (!sType) return {};
+
+    const aPatches = (oBinding.patchIds ?? []).map(sId => oPatches[sId]).filter((p): p is XsPatch => !!p),
+        oParams: XcsParameters = Object.assign({}, oProfile.values, ...aPatches.map(p => p.overrides)),
+        sSet = aPatches[aPatches.length - 1]?.material?.materialType || "customize";
+
+    return {
+        processingType: sType,
+        data: { [sType]: { materialType: sSet, parameter: { [sSet]: oParams } } }
+    };
+};
+
+// Rebuild the v1 device map (canvasId -> displayId -> processingType + params)
+// from the v2 bindings: each binding ties a profile (which owns the
+// processingType) to a list of display ids.
 const buildDeviceData = (
-    files: Record<string, Uint8Array>,
-    oProject: XsProjectJson
+    oDevice: XsDeviceJson,
+    oProfiles: XsProfiles
 ): XcsProject["device"] => {
-    const sDeviceId = oProject.activeDeviceId || oProject.modules?.devices?.[0];
-    if (!sDeviceId) return undefined;
-
-    const oDevice = readJson<XsDeviceJson>(files, `devices/device-${sDeviceId}.json`),
-        oProfiles = readJson<XsProfilesJson>(files, "profiles.json")?.profiles ?? {};
-    if (!oDevice?.processing) return undefined;
-
-    const aValue = Object.entries(oDevice.processing).map(([sCanvasId, oProc]) => {
+    const aValue = Object.entries(oDevice.processing ?? {}).map(([sCanvasId, oProc]) => {
         const sMode = oProc.activeMode,
-            aBindings = (sMode && oProc.modes?.[sMode]?.bindings) || [],
-            aDisplays: [string, { processingType?: string }][] = [];
+            oMode = (sMode && oProc.modes?.[sMode]) || {},
+            aDisplays: [string, XcsDeviceDisplayConfig][] = [];
 
-        aBindings.forEach(oBinding => {
-            const sType = oBinding.baseProfileId ? oProfiles[oBinding.baseProfileId]?.processingType : undefined;
-            oBinding.displayIds?.forEach(sId => aDisplays.push([sId, { processingType: sType }]));
+        (oMode.bindings ?? []).forEach(oBinding => {
+            // One config object shared by every display of the binding — they
+            // are bound to it precisely because they run the same settings.
+            const oCfg = buildDisplayConfig(oBinding, oProfiles, oMode.patches ?? {});
+            oBinding.displayIds?.forEach(sId => aDisplays.push([sId, oCfg]));
         });
 
-        return [sCanvasId, { mode: sMode, displays: { value: aDisplays } }] as
-            [string, { mode?: string; displays?: { value?: [string, { processingType?: string }][] } }];
+        return [sCanvasId, {
+            mode: sMode,
+            data: sMode && oMode.data ? { [sMode]: oMode.data } : undefined,
+            displays: { value: aDisplays }
+        }] as [string, XcsDeviceCanvasEntry];
     });
 
-    return { data: { value: aValue } };
+    return { power: oDevice.power, data: { value: aValue } };
 };
 
 /** Parse a .xs (xTool Studio) archive into the v1 XcsProject shape. */
@@ -223,5 +269,22 @@ export const parseXs = (buf: ArrayBuffer): XcsProject => {
         throw new Error("no canvases found");
     }
 
-    return { canvas: aCanvas, device: buildDeviceData(files, oProject) };
+    const sDeviceId = oProject.activeDeviceId || oProject.modules.devices?.[0],
+        oDevice = sDeviceId ? readJson<XsDeviceJson>(files, `devices/device-${sDeviceId}.json`) : undefined;
+
+    return {
+        canvas: aCanvas,
+        // v1 keeps these at the top level; v2 splits them over project.json and
+        // the device file. Normalise here so meta.ts has a single source.
+        extId: oDevice?.extId,
+        extName: oDevice?.extName,
+        version: oProject.versionInfo?.appVersion,
+        ua: oProject.versionInfo?.ua,
+        created: oProject.created,
+        modify: oProject.modify ?? oProject.versionInfo?.savedAt,
+        cover: oProject.cover ? fnResource(oProject.cover) : undefined,
+        device: oDevice
+            ? buildDeviceData(oDevice, readJson<XsProfilesJson>(files, "profiles.json")?.profiles ?? {})
+            : undefined
+    };
 };
