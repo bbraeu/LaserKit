@@ -133,6 +133,19 @@ export const TOOLS: ToolDef[] = [
         description: "Free in-browser jigsaw puzzle generator for laser cutting: any board size and piece count, with a classic undercut knob so the pieces interlock, adjustable variation and knob size, a seed you can return to, and every joint cut exactly once. Exports SVG, DXF and Falcon Design Space (.fds)."
     },
     {
+        id: "wordsearch",
+        slug: "wordsearch/",
+        label: "Word search",
+        short: "Word search",
+        hint: "a list of words → a grid to engrave",
+        blurb: "Hide a list of words in a grid of letters, in any direction, with a filler drawn from the words themselves — and never a word on the list that is not in the grid.",
+        // A grid with a word running through it.
+        icon: "M3.75 3.75h16.5v16.5H3.75zM3.75 9h16.5M3.75 14.25h16.5M9 3.75v16.5M14.25 3.75v16.5",
+        accepts: "nothing — it starts from a list of words",
+        title: "Word search generator for laser engraving — any size, any words | LaserKit",
+        description: "Free in-browser word search generator for laser cutting and engraving: hide your own words in a grid of any size, across, down, diagonally and backwards, with a filler drawn from the words’ own letters and a printed word list. Exports SVG, DXF and Falcon Design Space (.fds)."
+    },
+    {
         id: "maze",
         slug: "maze/",
         label: "Maze generator",

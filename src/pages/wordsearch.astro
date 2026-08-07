@@ -1,0 +1,89 @@
+---
+import ToolPage from "../components/ToolPage.astro";
+import WordSearchTool from "../tools/WordSearchTool";
+---
+
+<ToolPage tool="wordsearch">
+    <Fragment slot="lead">
+        Your own words hidden in a grid of letters, ready to engrave. Every word on the printed list is
+        <strong class="text-slate-300">actually in the grid</strong> — the ones that would not fit are taken off the
+        list rather than left there for somebody to hunt for.
+    </Fragment>
+
+    <WordSearchTool client:only="react">
+        <div slot="fallback" class="flex h-[100dvh] flex-col bg-[#08090d]">
+            <div class="h-12 shrink-0 border-b border-white/7"></div>
+            <div class="flex min-h-0 flex-1">
+                <div class="hidden w-60 shrink-0 border-r border-white/7 xl:block"></div>
+                <div class="flex-1"></div>
+                <div class="hidden w-76 shrink-0 border-l border-white/7 xl:block"></div>
+            </div>
+            <div class="h-7 shrink-0 border-t border-white/7"></div>
+        </div>
+    </WordSearchTool>
+
+    <section slot="notes" class="relative px-4 pb-24">
+        <div class="mx-auto w-[min(72rem,100%)]">
+            <div class="glass reveal rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">The one unforgivable bug</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    A word search that asks for a word it does not contain. Somebody looks for twenty minutes, and the
+                    answer is that the generator tried a couple of hundred random spots for the fourth word, gave up,
+                    and printed it on the list anyway.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    So the placement here is exhaustive rather than hopeful: every starting square in every allowed
+                    direction, shuffled, and the best one wins. If a word genuinely cannot go in — it is longer than
+                    the grid, or the grid is full — it is <em>dropped from the list too</em>, and the status bar says
+                    which. There is no third outcome.
+                </p>
+            </div>
+
+            <div class="mt-5 grid gap-5 lg:grid-cols-3">
+                <article class="glass reveal rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">Crossings, not corners</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Among all the places a word fits, the one that shares the most letters with words already
+                        placed wins. A grid whose words cross each other is dense and hard; one where each word was
+                        dropped into the first empty corner has a suspicious blank middle, and the eye goes straight
+                        to the letters that are doing something.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 110ms">
+                    <h2 class="text-lg font-semibold text-white">The filler gives it away</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Pad the gaps from the whole alphabet and the puzzle solves itself: a Q or an X says there is
+                        nothing to find there. Drawing the filler from the words' <em>own</em> letters is the single
+                        biggest thing that makes a grid hard — with it, every letter looks like it might be the start
+                        of something.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 220ms">
+                    <h2 class="text-lg font-semibold text-white">Monospaced, or it is not a grid</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        The letters are set by the browser's own shaper, which packs an I tighter than a W. In a
+                        proportional face the columns wander and the grid stops being one. Any monospaced font on your
+                        machine works; the system default is picked for you.
+                    </p>
+                </article>
+            </div>
+
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">The letters come from the text tool</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    Not a second glyph pipeline. This tool composes a string — the title, the grid, the word list —
+                    and hands it to the same machinery that sets a keychain: rendered large in your chosen font and
+                    traced, so the outline is accurate to the figure in the status bar. It means a word search gets
+                    every font on your machine, the same "cap height, not font size" sizing as everything else, and
+                    any improvement to the tracer for free.
+                </p>
+            </div>
+
+            <p class="reveal mt-5 text-xs leading-relaxed text-slate-500">
+                Everything goes in capitals, which in German makes a word with an <em>ß</em> one letter longer than it
+                was typed — "GRÖSSE" is six squares, not five. Below about 4 mm an engraved capital starts to close up,
+                so a big grid wants a big piece rather than smaller letters.
+            </p>
+        </div>
+    </section>
+</ToolPage>

@@ -30,6 +30,19 @@ export const REPO = "https://github.com/bbraeu/LaserKit";
 
 export const RELEASES: Release[] = [
     {
+        version: "3.11.0",
+        date: "2026-08-08",
+        title: "Word searches",
+        tools: ["wordsearch"],
+        notes: [
+            "New tool. Your own words hidden in a grid of any size, across, down, diagonally and backwards.",
+            "Every word on the printed list is actually in the grid. Placement is exhaustive rather than hopeful — every starting square in every allowed direction — and a word that genuinely cannot fit is dropped from the list as well as from the grid.",
+            "Among the places a word fits, the one that crosses the most words already placed wins. A grid whose words cross is dense and hard; one where each was dropped in the first empty corner has a suspicious blank middle.",
+            "The filler is drawn from the words' own letters, so a stray Q cannot say “nothing here”.",
+            "The letters come from the text tool rather than a second glyph pipeline, so a word search gets every font on the machine and the same cap-height sizing as everything else."
+        ]
+    },
+    {
         version: "3.10.1",
         date: "2026-08-08",
         title: "Mandalas that look like mandalas",
