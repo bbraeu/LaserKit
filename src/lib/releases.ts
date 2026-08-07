@@ -30,6 +30,19 @@ export const REPO = "https://github.com/bbraeu/LaserKit";
 
 export const RELEASES: Release[] = [
     {
+        version: "3.8.0",
+        date: "2026-08-07",
+        title: "The jigsaw puzzle generator",
+        tools: ["puzzle"],
+        notes: [
+            "New tool. Any board size, any number of pieces, with the classic undercut knob — the neck is narrower than the head, which is the only reason a finished puzzle can be slid across a table in one piece.",
+            "Every joint is cut once. A piece and its neighbour share it, so cutting each piece's own outline would send the beam down every internal line twice: twice the job, and the joint burnt a full extra kerf loose.",
+            "Variation moves each knob along its edge and never touches the neck. At zero every piece fits every socket, and the tool says so rather than letting you find out after cutting.",
+            "The kerf is the fit: the pieces come out about one kerf loose and there is nothing to compensate. Cut a 2 × 2 test first.",
+            "A seed, so changing the board size does not reshuffle the pieces."
+        ]
+    },
+    {
         version: "3.7.0",
         date: "2026-08-07",
         title: "The maze generator",

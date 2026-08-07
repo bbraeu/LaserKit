@@ -1,0 +1,92 @@
+---
+import ToolPage from "../components/ToolPage.astro";
+import PuzzleTool from "../tools/PuzzleTool";
+---
+
+<ToolPage tool="puzzle">
+    <Fragment slot="lead">
+        A jigsaw at any size and any number of pieces, with knobs that
+        <strong class="text-slate-300">actually undercut</strong> — so the pieces hold each other rather than falling
+        apart the moment you pick the puzzle up. Every joint is cut once, and the seed means the puzzle you liked is
+        the puzzle you get back.
+    </Fragment>
+
+    <PuzzleTool client:only="react">
+        <div slot="fallback" class="flex h-[100dvh] flex-col bg-[#08090d]">
+            <div class="h-12 shrink-0 border-b border-white/7"></div>
+            <div class="flex min-h-0 flex-1">
+                <div class="hidden w-60 shrink-0 border-r border-white/7 xl:block"></div>
+                <div class="flex-1"></div>
+                <div class="hidden w-76 shrink-0 border-l border-white/7 xl:block"></div>
+            </div>
+            <div class="h-7 shrink-0 border-t border-white/7"></div>
+        </div>
+    </PuzzleTool>
+
+    <section slot="notes" class="relative px-4 pb-24">
+        <div class="mx-auto w-[min(72rem,100%)]">
+            <div class="glass reveal rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">The undercut is the whole thing</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    What makes a jigsaw a jigsaw is that the knob's <strong class="text-slate-300">neck is narrower
+                    than its head</strong>. A piece can be lifted out of the plane but not pulled out sideways, and
+                    that is the only reason a finished puzzle can be slid across a table in one piece.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    Lose it and you have a grid of squares with bumps on — which looks perfectly convincing on screen
+                    and comes apart in your hands. So the profile here is the classic seven-curve knob with a real
+                    waist, every number in it a fraction of the edge so it is the same shape at any piece size, and
+                    the variation control never touches the neck: <em>where</em> a knob sits is jitter, <em>how well
+                    it locks</em> is not.
+                </p>
+            </div>
+
+            <div class="mt-5 grid gap-5 lg:grid-cols-3">
+                <article class="glass reveal rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">The kerf is the fit</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        The beam takes its own width out of every joint, so the pieces come out of the sheet about one
+                        kerf loose. There is nothing to compensate — tightening the cut by half a kerf on each side
+                        would weld each piece to its neighbour. What the tool can do is tell you, and suggest cutting
+                        a 2 × 2 test before a 300-piece sheet: how loose "one kerf" feels depends on your material and
+                        your focus, and it is the difference between a puzzle that clicks and one that slides apart.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 110ms">
+                    <h2 class="text-lg font-semibold text-white">Every joint, cut once</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        A piece and its neighbour share an edge. Cutting each piece's own closed outline would send
+                        the beam down every internal line twice: twice the job time, and a joint burnt a full extra
+                        kerf loose. So the tool generates one line per shared edge, and the status bar counts joints
+                        rather than pieces.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 220ms">
+                    <h2 class="text-lg font-semibold text-white">Glue the picture on first</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        A photo glued to the board and then cut with it comes apart cleanly along every joint. A photo
+                        glued to loose pieces never lines up again — the kerf you just cut out is exactly the width of
+                        the picture that is now missing. Print, mount, let it dry, then cut.
+                    </p>
+                </article>
+            </div>
+
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">Variation, and why zero is a trap</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    At zero variation every piece is the same shape. That is a genuinely handsome object — a perfect
+                    lattice — and a completely broken puzzle: every piece fits every socket, so there is nothing to
+                    solve and no way to know you are wrong. The tool says so in the status bar rather than leaving you
+                    to find out after cutting. Anything above about 0.3 gives pieces that argue with each other, which
+                    is the point.
+                </p>
+            </div>
+
+            <p class="reveal mt-5 text-xs leading-relaxed text-slate-500">
+                Pieces smaller than about 12 mm are hard on fingers and harder on knobs — at that size the necks are
+                thin enough to snap off as the puzzle is broken up for the first time, which is exactly when nobody is
+                being careful. Fewer, larger pieces make a better object than more, smaller ones.
+            </p>
+        </div>
+    </section>
+</ToolPage>

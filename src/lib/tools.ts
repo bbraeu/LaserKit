@@ -94,6 +94,19 @@ export const TOOLS: ToolDef[] = [
         description: "Free in-browser box generator for laser cutting: finger-jointed boxes at any size, measured inside or outside, with a lay-on, tray, hinged or closed lid, an inset floor, cross-lapped dividers and kerf compensation on every joint. Exports SVG, DXF and Falcon Design Space (.fds)."
     },
     {
+        id: "puzzle",
+        slug: "puzzle/",
+        label: "Jigsaw puzzle",
+        short: "Puzzle",
+        hint: "a board → interlocking pieces",
+        blurb: "A jigsaw of any size and any number of pieces, with knobs that actually undercut — so the pieces hold each other instead of falling apart when you lift it.",
+        // Two interlocking pieces.
+        icon: "M10.5 3.75a1.5 1.5 0 1 1 3 0v.75h3a1.5 1.5 0 0 1 1.5 1.5v3h.75a1.5 1.5 0 1 1 0 3h-.75v3a1.5 1.5 0 0 1-1.5 1.5h-3v.75a1.5 1.5 0 1 1-3 0v-.75h-3a1.5 1.5 0 0 1-1.5-1.5v-3h-.75a1.5 1.5 0 1 1 0-3h.75v-3a1.5 1.5 0 0 1 1.5-1.5h3v-.75Z",
+        accepts: "nothing — it starts from a board size",
+        title: "Jigsaw puzzle generator for laser cutting — any size, any piece count | LaserKit",
+        description: "Free in-browser jigsaw puzzle generator for laser cutting: any board size and piece count, with a classic undercut knob so the pieces interlock, adjustable variation and knob size, a seed you can return to, and every joint cut exactly once. Exports SVG, DXF and Falcon Design Space (.fds)."
+    },
+    {
         id: "maze",
         slug: "maze/",
         label: "Maze generator",
