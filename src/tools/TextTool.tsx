@@ -3,7 +3,7 @@ import { AlignCenter, AlignLeft, AlignRight, Bold, Italic, KeyRound, Type } from
 import { availableFonts, isFontFile, loadFontFile } from "../lib/fonts";
 import type { FontChoice } from "../lib/fonts";
 import { buildTextDesign, textToDxf, textToFds, textToSvg } from "../lib/text";
-import type { LetterMode, RingEdge, TextAlign, TextOptions } from "../lib/text";
+import type { ArcSide, LetterMode, RingEdge, TextAlign, TextOptions, TextShape } from "../lib/text";
 import type { ConnectMode } from "../lib/outline";
 import { PanelSection } from "../workspace/PanelSection";
 import { PresetList } from "../workspace/PresetList";
@@ -53,6 +53,13 @@ const DEFAULTS: TextParams = {
     wordSpacing: 0,
     lineHeight: 1.4,
     align: "center",
+
+    shape: "straight",
+    // Big enough that a short word bends visibly without fanning out — and the
+    // size of a coaster, which is what most curved text ends up on.
+    arcRadius: 40,
+    arcSide: "top",
+
     // Type is not a photograph, and it is the one thing people recognise
     // instantly: round the corner off an Arial stem and it stops being Arial.
     // The tracer's own defaults are tuned for a rasterised photo edge that
@@ -103,6 +110,16 @@ const EDGES = [
     { id: "bottom" as const, label: "Bottom" }
 ];
 
+const SHAPES = [
+    { id: "straight" as const, label: "Straight", hint: "A flat baseline. Everything else in this tool is the same either way." },
+    { id: "arc" as const, label: "Arc", hint: "The letters are set round a circle. Each one is moved and turned as a whole — the letterforms themselves are never bent, so an O stays an O rather than becoming an egg." }
+];
+
+const ARC_SIDES = [
+    { id: "top" as const, label: "Over the top", hint: "Standing on the outside of the circle, reading left to right over the crown of it." },
+    { id: "bottom" as const, label: "Round the bottom", hint: "Hanging under the circle, still reading left to right, heads pointing at the centre — the lower half of a badge." }
+];
+
 const CONNECT_MODES = [
     { id: "wrap" as const, label: "Shrink-wrap", hint: "One smooth outline sweeping from letter to letter, hugging each of them. Reach is how far it bridges." },
     { id: "bridge" as const, label: "Bridges", hint: "Each letter keeps its own shape, joined by a 4 mm neck along the shortest route." },
@@ -133,10 +150,19 @@ const PRESETS: Preset<TextParams>[] = [
         label: "Engrave only",
         hint: "Just the lettering, to burn onto something you already have",
         patch: { plate: false, letters: "engrave", ring: false }
+    },
+    {
+        id: "badge",
+        label: "Round a badge",
+        hint: "Set over the top of a 40 mm circle, engraved, no plate",
+        patch: { shape: "arc", arcRadius: 40, arcSide: "top", align: "center", plate: false, letters: "engrave", ring: false }
     }
 ];
 
 const mm = (n: number): string => `${n.toFixed(1)} mm`;
+
+/** How far round the circle the longest line reaches, as a plain angle. */
+const degrees = (rad: number): string => `${Math.round((rad * 180) / Math.PI)}°`;
 
 export default function TextTool() {
     const params = useHistoryParams<TextParams>(DEFAULTS, {
@@ -194,7 +220,8 @@ export default function TextTool() {
         // letters' operation and the trace tolerances do not.
         fitKey: [
             p.text, p.fontFamily, p.bold, p.italic, p.capHeight, p.letterSpacing,
-            p.wordSpacing, p.lineHeight, p.align, p.plate, p.border, p.connect,
+            p.wordSpacing, p.lineHeight, p.align, p.shape, p.arcRadius, p.arcSide,
+            p.plate, p.border, p.connect,
             p.connectMode, p.reach, p.ring, p.ringDiameter, p.ringEdge, p.ringOffset,
             p.ringInset, p.ringWall
         ].join("|"),
@@ -352,12 +379,17 @@ export default function TextTool() {
                     </div>
                 </Field>
 
-                <SegmentedField
-                    label="Alignment"
-                    value={p.align}
-                    choices={ALIGNS}
-                    onChange={(v: TextAlign) => params.set({ align: v }, { label: "Alignment" })}
-                />
+                {/* On a circle every line is centred on the crown of the arc,
+                    so an alignment control there would be a control that does
+                    nothing. It is left out rather than disabled. */}
+                {p.shape === "straight" && (
+                    <SegmentedField
+                        label="Alignment"
+                        value={p.align}
+                        choices={ALIGNS}
+                        onChange={(v: TextAlign) => params.set({ align: v }, { label: "Alignment" })}
+                    />
+                )}
 
                 <SliderField
                     label="Cap height"
@@ -367,6 +399,40 @@ export default function TextTool() {
                     max={120}
                     onChange={n => params.set({ capHeight: n }, { label: "Cap height", coalesce: "capHeight" })}
                 />
+
+                <SegmentedField
+                    label="Baseline"
+                    hint={SHAPES.find(o => o.id === p.shape)!.hint}
+                    value={p.shape}
+                    choices={SHAPES}
+                    onChange={(v: TextShape) => params.set({ shape: v }, { label: "Baseline" })}
+                />
+                {p.shape === "arc" && (
+                    <>
+                        <SliderField
+                            label="Radius"
+                            hint="The circle the letters stand on, measured to the baseline. A badge or a coaster is 30–45 mm; below about one and a half times the cap height the letters fan out like spokes and stop reading as a word."
+                            value={p.arcRadius}
+                            min={5}
+                            max={300}
+                            onChange={n => params.set({ arcRadius: n }, { label: "Radius", coalesce: "arcRadius" })}
+                        />
+                        <SegmentedField
+                            label="Set"
+                            hint={ARC_SIDES.find(o => o.id === p.arcSide)!.hint}
+                            value={p.arcSide}
+                            choices={ARC_SIDES}
+                            onChange={(v: ArcSide) => params.set({ arcSide: v }, { label: "Arc side" })}
+                        />
+                        <p className="text-[11px] leading-relaxed text-subtle-foreground">
+                            {result && result.arcSweep > 0
+                                ? <>Covers <span className="text-muted-foreground">{degrees(result.arcSweep)}</span> of the circle.{" "}</>
+                                : null}
+                            A badge with a word above and below is two runs: set the top, export it, switch to{" "}
+                            <em>Round the bottom</em> and export that — the same radius puts both on one circle.
+                        </p>
+                    </>
+                )}
             </PanelSection>
 
             {/* ── The gaps between them ──────────────────────────────────── */}

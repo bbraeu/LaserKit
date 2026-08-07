@@ -297,6 +297,117 @@ test.describe("text generator", () => {
         await expect(page.getByLabel("Border, exact value")).toHaveValue("2.5");
     });
 
+    // ── set round a circle ──────────────────────────────────────────────
+    //
+    // The arc's own arithmetic is pinned in tests/unit/text.test.ts, where
+    // arcPoint can be called directly. What only a browser can show is that the
+    // curve is reached at all: it takes a completely different route through
+    // the builder — every glyph traced apart instead of the word rendered once
+    // — and jsdom has no canvas to set type on, so nothing below this line can
+    // be tested anywhere else.
+
+    const bend = async (page: import("@playwright/test").Page, radius: number) => {
+        await page.getByRole("radio", { name: "Arc" }).click();
+        const r = page.getByLabel("Radius, exact value");
+        await r.fill(String(radius));
+        await r.blur();
+    };
+
+    test("bends the word round a circle", async ({ page }) => {
+        await setText(page, "LASERKIT");
+        // The baseline has to be read after the build that produced it, or the
+        // comparison is against a frame of the word that was there before.
+        await settledStat(page, "Size");
+        const [w0, h0] = await size(page);
+
+        await bend(page, 40);
+        // A word bent over a 40 mm circle is shorter across and much taller: it
+        // now spans the sagitta of its own arc as well as the letters.
+        await pollHeight(page).toBeGreaterThan(h0 + 5);
+        await pollWidth(page).toBeLessThan(w0);
+    });
+
+    test("straightens out again as the radius grows", async ({ page }) => {
+        await setText(page, "LASERKIT");
+        await bend(page, 30);
+        await settledStat(page, "Size");
+        const [, tight] = await size(page);
+
+        const r = page.getByLabel("Radius, exact value");
+        await r.fill("300");
+        await r.blur();
+        // The control has to be continuous — a big radius is nearly a straight
+        // line, not a jump to somewhere else.
+        await pollHeight(page).toBeLessThan(tight);
+    });
+
+    test("hangs the second half of a badge under the same circle", async ({ page }) => {
+        await setText(page, "LASERKIT");
+        await bend(page, 40);
+        await settledStat(page, "Size");
+        const [wTop, hTop] = await size(page);
+        const covers = page.getByTestId("inspector").getByText(/Covers \d+° of the circle/);
+        const angle = await covers.innerText();
+
+        await page.getByRole("radio", { name: "Round the bottom" }).click();
+        await settledStat(page, "Size");
+
+        // Not a mirror image, and it should not be one: on top the letters
+        // stand *outward* and their caps sweep the larger circle, underneath
+        // they hang inward and converge. So the piece is genuinely smaller.
+        const [wBottom, hBottom] = await size(page);
+        expect(wBottom).toBeLessThan(wTop);
+        expect(hBottom).toBeLessThan(hTop);
+
+        // What has to be identical is the circle itself — that is the whole
+        // point of cutting the two halves one after the other.
+        await expect(covers).toHaveText(angle);
+    });
+
+    test("welds letters that lap over each other on the curve", async ({ page }) => {
+        // The bug this pins: bending used to move each letter's *traced
+        // outline*, so two that overlapped stayed two closed contours. An
+        // engraved fill then cancelled where they crossed — the overlap came
+        // out unburnt — and a cut ran each letter's whole outline, straight
+        // through the material joining it to its neighbour.
+        //
+        // Bending a word cannot change how many pieces it is made of. Straight
+        // text is welded by being rendered in one pass; curved text has to come
+        // out the same.
+        await page.getByRole("switch", { name: "Backing plate" }).click();
+        const spacing = page.getByLabel("Letters, exact value");
+        await spacing.fill("-4");
+        await spacing.blur();
+        await settledStat(page, "Shapes");
+        const straight = await stat(page, "Shapes").innerText();
+
+        await bend(page, 70);
+        await settledStat(page, "Shapes");
+        expect(await stat(page, "Shapes").innerText()).toBe(straight);
+    });
+
+    test("offers no alignment on a circle, because there is nothing to align to", async ({ page }) => {
+        await expect(page.getByRole("radio", { name: "Align left" })).toBeVisible();
+        await bend(page, 40);
+        await expect(page.getByRole("radio", { name: "Align left" })).toHaveCount(0);
+    });
+
+    test("says when the letters have fanned out into spokes", async ({ page }) => {
+        await setText(page, "LASERKIT");
+        await bend(page, 8);
+        await expect(page.getByTestId("statusbar")).toContainText(/\d note/);
+        await page.getByTestId("statusbar").getByRole("button", { name: /notes?$/ }).hover();
+        await expect(page.getByRole("tooltip")).toContainText(/spokes|wraps .* round the circle/);
+    });
+
+    test("exports the curve, and the plate still welds round it", async ({ page }) => {
+        await setText(page, "ANNA");
+        await bend(page, 40);
+        await expect(stat(page, "Cut lines")).toContainText("2"); // the plate and the hole
+        const svg = await exportDefault(page);
+        expect(svg.suggestedFilename()).toBe("ANNA.svg");
+    });
+
     test("hands the word on to the contour tracer", async ({ page }) => {
         await page.getByTestId("send-to").click();
         await page.getByRole("menuitem", { name: /Outer contour/ }).click();

@@ -79,6 +79,10 @@ const MAX_EDGE_GLYPHS = 120;
 export type LetterMode = "engrave" | "cut" | "none";
 export type RingEdge = "left" | "right" | "top" | "bottom";
 export type TextAlign = "left" | "center" | "right";
+/** A straight baseline, or one bent round a circle. */
+export type TextShape = "straight" | "arc";
+/** Over the top of the circle, or round the bottom of it. */
+export type ArcSide = "top" | "bottom";
 
 export interface TextOptions {
     text: string;
@@ -94,6 +98,21 @@ export interface TextOptions {
     /** line pitch as a multiple of the cap height */
     lineHeight: number;
     align: TextAlign;
+
+    /** straight, or set round a circle */
+    shape: TextShape;
+    /** radius of the baseline, mm — the circle the letters stand on */
+    arcRadius: number;
+    /**
+     * Which way up.
+     *
+     * "top" stands the letters on the outside of the circle, reading left to
+     * right over the crown of it. "bottom" hangs them under it, still reading
+     * left to right, with their heads pointing at the centre — the two halves
+     * of a badge, cut one after the other.
+     */
+    arcSide: ArcSide;
+
     /** 0…1.334, how much of a bend the tracer may round into a curve */
     smooth: number;
     /** node reduction tolerance, in render pixels */
@@ -168,6 +187,8 @@ export interface TextResult {
     accuracy: number;
     /** the reach the gaps asked for, so the slider can start there */
     autoReach: number;
+    /** how much of the circle a curved baseline covers, in radians; 0 when straight */
+    arcSweep: number;
     /** the hole's centre in the finished piece's coordinates, for dragging it */
     ring: Point | null;
     /** what the hole is placed against — the plate, or the letters without one */
@@ -179,6 +200,16 @@ export interface TextResult {
 // Setting the text
 // ---------------------------------------------------------------------------
 
+/** One line of text as the shaper laid it: where it starts and how far it runs. */
+interface LineRun {
+    /** the pen's x at the first character, in canvas pixels */
+    x: number;
+    /** the baseline, in canvas pixels */
+    y: number;
+    /** the advance width — what alignment and arc centring are measured on */
+    width: number;
+}
+
 interface Rendered {
     img: TraceImage;
     /** the canvas' own width in mm, which is what the trace is scaled by */
@@ -188,6 +219,8 @@ interface Rendered {
     fontPx: number;
     /** each character's pen position, already in the canvas' own coordinates */
     aPen: { ch: string; x: number; y: number }[];
+    /** the lines, in the same coordinates */
+    aRun: LineRun[];
 }
 
 interface Laid {
@@ -195,6 +228,7 @@ interface Laid {
     aOrigin: Point[];
     /** where each character's baseline starts, in canvas pixels */
     aPen: { ch: string; x: number; y: number }[];
+    aRun: LineRun[];
     /** the ink box in canvas pixels */
     box: Box;
 }
@@ -263,7 +297,8 @@ const renderText = (o: TextOptions): Rendered | null => {
             y0 = Math.min(y0, or.y - m.actualBoundingBoxAscent);
             y1 = Math.max(y1, or.y + m.actualBoundingBoxDescent);
         });
-        return { fontPx, aOrigin, aPen, box: { x0, y0, x1, y1 } };
+        const aRun: LineRun[] = aOrigin.map((or, i) => ({ x: or.x, y: or.y, width: aMetric[i]!.width }));
+        return { fontPx, aOrigin, aPen, aRun, box: { x0, y0, x1, y1 } };
     };
 
     // Start from the resolution the glyphs want, then back off if that much text
@@ -312,7 +347,8 @@ const renderText = (o: TextOptions): Rendered | null => {
         fontPx: laid.fontPx,
         // Moved into the canvas' own coordinates, so a separately traced glyph
         // lands exactly where the whole-text render put it.
-        aPen: laid.aPen.map(q => ({ ch: q.ch, x: q.x - box.x0 + PAD_PX, y: q.y - box.y0 + PAD_PX }))
+        aPen: laid.aPen.map(q => ({ ch: q.ch, x: q.x - box.x0 + PAD_PX, y: q.y - box.y0 + PAD_PX })),
+        aRun: laid.aRun.map(q => ({ x: q.x - box.x0 + PAD_PX, y: q.y - box.y0 + PAD_PX, width: q.width }))
     };
 };
 
@@ -326,6 +362,8 @@ const renderText = (o: TextOptions): Rendered | null => {
 interface TracedGlyph {
     rings: Point[][];
     box: Box;
+    /** the point on the baseline the glyph stands on, in millimetres */
+    pen: Point;
 }
 
 /** Even-odd against one glyph's own rings: its counters are holes, not ink. */
@@ -420,19 +458,29 @@ const clipToSeams = (aGlyph: TracedGlyph[], gapTol: number): Point[][] => {
     return out;
 };
 
-const traceGlyphEdges = (o: TextOptions, r: Rendered): { rings: Point[][]; warnings: string[] } => {
+/**
+ * Every character set and traced by itself, placed where the whole render put it.
+ *
+ * Two features need this and they need it for opposite reasons. The engraved
+ * letter edges need the boundary the one-pass render *fused away*; a curved
+ * baseline needs each glyph as a separate rigid body so it can be turned to face
+ * its own point on the circle. Either way the answer is the same list, so it is
+ * traced once here rather than twice in two places.
+ */
+const traceEachGlyph = (o: TextOptions, r: Rendered, sWhy: string): { aGlyph: TracedGlyph[]; accuracy: number; warnings: string[] } => {
     const warnings: string[] = [],
-        rings: Point[][] = [];
+        aGlyph: TracedGlyph[] = [];
+    let accuracy = 0;
+
     const aPen = r.aPen.slice(0, MAX_EDGE_GLYPHS);
     if (r.aPen.length > MAX_EDGE_GLYPHS) {
-        warnings.push(`Only the first ${MAX_EDGE_GLYPHS} letters got their own engraved edge — past that, tracing each one apart takes longer than it is worth.`);
+        warnings.push(`Only the first ${MAX_EDGE_GLYPHS} letters ${sWhy} — past that, tracing each one apart takes longer than it is worth.`);
     }
 
     const canvas = document.createElement("canvas"),
         ctx = canvas.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return { rings, warnings };
+    if (!ctx) return { aGlyph, accuracy, warnings };
 
-    const aGlyph: TracedGlyph[] = [];
     for (const pen of aPen) {
         ctx.font = fontShorthand(o, r.fontPx);
         const m = ctx.measureText(pen.ch),
@@ -473,18 +521,305 @@ const traceGlyphEdges = (o: TextOptions, r: Rendered): { rings: Point[][]; warni
         } catch {
             continue; /* a glyph the tracer could make nothing of */
         }
+        accuracy = Math.max(accuracy, traced.accuracy);
 
         // Glyph space → the whole render's space, both in millimetres.
         const dx = (pen.x - (left + PAD_PX)) / r.pxPerMm,
             dy = (pen.y - (asc + PAD_PX)) / r.pxPerMm,
             placed = traced.aSub.map(sub => sub.points.map(q => ({ x: q.x + dx, y: q.y + dy })));
-        if (placed.length) aGlyph.push({ rings: placed, box: ringBounds(placed) });
+        // The baseline the glyph was set on, kept for the arc: a letter has to
+        // turn about the point it stands on, not about the middle of its ink,
+        // or an "o" and an "l" would end up on different circles.
+        if (placed.length) aGlyph.push({ rings: placed, box: ringBounds(placed), pen: { x: pen.x / r.pxPerMm, y: pen.y / r.pxPerMm } });
     }
 
+    return { aGlyph, accuracy, warnings };
+};
+
+const traceGlyphEdges = (o: TextOptions, r: Rendered): { rings: Point[][]; warnings: string[] } => {
+    const { aGlyph, warnings } = traceEachGlyph(o, r, "got their own engraved edge");
     // The two outlines only agree to the trace tolerance where they run
     // along each other, so the gap bridged is scaled to the letter.
-    rings.push(...clipToSeams(aGlyph, o.capHeight * 0.06));
-    return { rings, warnings };
+    return { rings: clipToSeams(aGlyph, o.capHeight * 0.06), warnings };
+};
+
+// ---------------------------------------------------------------------------
+// A curved baseline
+//
+// Each glyph is moved and turned as one rigid body rather than having its own
+// points bent, which is what every type-on-a-path does and the only thing that
+// looks like type: bending the outlines themselves would fatten the inside of
+// every stem and thin the outside, and an "O" set on a 20 mm badge would come
+// out as an egg. The letterforms stay exactly as the font drew them; only where
+// they stand and which way they face change.
+//
+// A letter turns about the point it stands on — its own pen position on the
+// baseline — so letters with different ink heights stay on one circle. The
+// angle comes from the *middle* of its advance rather than its left edge, which
+// is what stops a wide letter leaning backwards out of the curve.
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a point of a letter lands once its baseline is bent round a circle.
+ *
+ * `s` is how far along the baseline the letter stands, measured from the middle
+ * of its line — so 0 is the crown of the arc and the sign says which way round.
+ * `dx` and `dy` are the point's own offset from that spot on a straight
+ * baseline, with dy negative above it, exactly as the glyph was traced.
+ *
+ * Exported for the tests: it is the whole of the curve, and the only part of it
+ * that can be checked without a browser to set type in.
+ */
+export const arcPoint = (s: number, dy: number, dx: number, radius: number, side: ArcSide, centre: Point): Point => {
+    const k = side === "top" ? 1 : -1,
+        phi = s / radius,
+        sin = Math.sin(phi),
+        cos = Math.cos(phi),
+        // The baseline under this letter, and the two directions there: along
+        // the line, and away from the material's own idea of "up".
+        bx = centre.x + radius * sin,
+        by = centre.y - k * radius * cos,
+        tx = cos, ty = k * sin,
+        ux = k * sin, uy = -cos;
+    return { x: bx + dx * tx - dy * ux, y: by + dx * ty - dy * uy };
+};
+
+/** The circle each line sits on, and how much of it the text covers. */
+interface ArcPlan {
+    /** one radius per line: they nest inward on a top arc, outward below */
+    aRadius: number[];
+    /** the largest fraction of a circle any line covers, in radians */
+    sweep: number;
+    warnings: string[];
+}
+
+/**
+ * The arc the text is going to be set on, worked out from the metrics alone.
+ *
+ * Deliberately independent of any glyph geometry: the panel reports the angle
+ * and these warnings on every keystroke, and none of that should wait for a
+ * trace.
+ */
+const planArc = (o: TextOptions, r: Rendered): ArcPlan => {
+    const warnings: string[] = [],
+        k = o.arcSide === "top" ? 1 : -1,
+        pitch = o.capHeight * o.lineHeight,
+        base = Math.max(o.capHeight * 0.6, o.arcRadius),
+        floor = o.capHeight * 0.6,
+        aRadius = r.aRun.map((_, i) => Math.max(floor, base - k * i * pitch)),
+        // Per line rather than on the widest one: lines nest, so a short second
+        // line on a much smaller radius can cover more of the circle than a
+        // long first line on a large one.
+        sweep = Math.max(0, ...r.aRun.map((q, i) => q.width / r.pxPerMm / aRadius[i]!));
+
+    if (sweep > Math.PI * 2) {
+        warnings.push(
+            `At a ${r3(base)} mm radius this text wraps ${(sweep / (Math.PI * 2)).toFixed(1)} times round the circle and `
+            + "overlaps itself. Make the radius bigger, the letters smaller, or the text shorter."
+        );
+    } else if (sweep > Math.PI * 1.6) {
+        warnings.push(`The text covers ${Math.round((sweep * 180) / Math.PI)} degrees of the circle — the two ends nearly meet.`);
+    }
+    if (base < o.capHeight * 1.5) {
+        warnings.push(
+            `A ${r3(base)} mm radius is barely larger than the ${r3(o.capHeight)} mm letters standing on it, so they fan `
+            + "out like spokes rather than reading as a word."
+        );
+    }
+    return { aRadius, sweep, warnings };
+};
+
+/** One character, placed and turned, in millimetres. */
+interface ArcGlyph {
+    ch: string;
+    /** the advance slot it occupies, mm — the letter is drawn centred in it */
+    advance: number;
+    /** arc length from the middle of its line */
+    s: number;
+    radius: number;
+    /** the ink box, already bent, so the canvas can be sized before drawing */
+    box: Box;
+}
+
+/**
+ * The text set round a circle, rasterised in one pass.
+ *
+ * The first version of this bent the *traced outlines*: each glyph traced from
+ * its own raster, then the polygon moved and turned. It drew the right shape
+ * and got two things wrong that only show up on the bed. Letters lapping over
+ * each other stayed separate closed contours, so an even-odd fill cancelled
+ * where they crossed and a cut ran through the very material joining them; and
+ * welding them afterwards meant tracing a picture of a trace, which doubled the
+ * node count and baked the first pass's stair-steps into the second.
+ *
+ * Drawing them bent in the first place removes both at once. A canvas rotates
+ * about any point, so each glyph is painted by the font itself at its own
+ * angle, onto one canvas, in reading order — overlaps merge because paint is
+ * opaque — and what comes out is what straight text produces: one silhouette,
+ * one trace, the same fidelity. The transform is the one `arcPoint` computes,
+ * so the box measured before drawing is the box that gets drawn.
+ */
+const renderArcText = (o: TextOptions): Rendered | null => {
+    const aLine = o.text.split("\n");
+    if (!o.text.trim()) return null;
+
+    const canvas = document.createElement("canvas"),
+        ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) throw new Error("This browser has no 2D canvas to set the text on.");
+
+    ctx.font = fontShorthand(o, NOMINAL_PX);
+    const capNominal = ctx.measureText("H").actualBoundingBoxAscent;
+    if (!(capNominal > 0)) throw new Error("This font produced no glyphs to trace.");
+
+    const k = o.arcSide === "top" ? 1 : -1,
+        centre: Point = { x: 0, y: 0 };
+
+    /** Lay the lines round the circle at a given resolution. */
+    const layOut = (pxPerMm: number) => {
+        const fontPx = (NOMINAL_PX * o.capHeight * pxPerMm) / capNominal;
+        ctx.font = fontShorthand(o, fontPx);
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+        ctx.letterSpacing = `${o.letterSpacing * pxPerMm}px`;
+        ctx.wordSpacing = `${o.wordSpacing * pxPerMm}px`;
+
+        const pitch = o.capHeight * o.lineHeight,
+            base = Math.max(o.capHeight * 0.6, o.arcRadius),
+            floor = o.capHeight * 0.6;
+
+        const aGlyph: ArcGlyph[] = [];
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+
+        aLine.forEach((line, i) => {
+            const chars = [...line],
+                radius = Math.max(floor, base - k * i * pitch),
+                // Every line is centred on the crown: on a circle there is no
+                // left edge to be ragged against.
+                width = ctx.measureText(line || " ").width,
+                prefix = (n: number): number => ctx.measureText(chars.slice(0, n).join("")).width;
+
+            chars.forEach((ch, j) => {
+                if (!ch.trim()) return;
+                // The advance is the difference between two prefixes, so
+                // whatever the shaper did about kerning and tracking is already
+                // in it rather than re-derived here.
+                const from = prefix(j),
+                    advance = prefix(j + 1) - from,
+                    s = (from + advance / 2 - width / 2) / pxPerMm,
+                    m = ctx.measureText(ch),
+                    // Local to the glyph's own anchor: the middle of its slot,
+                    // on the baseline.
+                    dxL = (-advance / 2 - m.actualBoundingBoxLeft) / pxPerMm,
+                    dxR = (-advance / 2 + m.actualBoundingBoxRight) / pxPerMm,
+                    dyT = -m.actualBoundingBoxAscent / pxPerMm,
+                    dyB = m.actualBoundingBoxDescent / pxPerMm;
+
+                let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+                for (const dx of [dxL, dxR]) {
+                    for (const dy of [dyT, dyB]) {
+                        const q = arcPoint(s, dy, dx, radius, o.arcSide, centre);
+                        bx0 = Math.min(bx0, q.x); bx1 = Math.max(bx1, q.x);
+                        by0 = Math.min(by0, q.y); by1 = Math.max(by1, q.y);
+                    }
+                }
+                x0 = Math.min(x0, bx0); x1 = Math.max(x1, bx1);
+                y0 = Math.min(y0, by0); y1 = Math.max(y1, by1);
+                aGlyph.push({ ch, advance, s, radius, box: { x0: bx0, y0: by0, x1: bx1, y1: by1 } });
+            });
+        });
+
+        return { fontPx, aGlyph, box: { x0, y0, x1, y1 } };
+    };
+
+    // The glyph fixes the resolution, then it is backed off if this much of it
+    // would not fit on a canvas — the same rule straight text follows.
+    let pxPerMm = RENDER_CAP_PX / Math.max(0.5, o.capHeight),
+        laid = layOut(pxPerMm);
+    const spanX = (laid.box.x1 - laid.box.x0) * pxPerMm,
+        spanY = (laid.box.y1 - laid.box.y0) * pxPerMm,
+        over = Math.max((spanX + PAD_PX * 2) / MAX_PX, (spanY + PAD_PX * 2) / MAX_PX);
+    if (over > 1) {
+        pxPerMm /= over;
+        laid = layOut(pxPerMm);
+    }
+
+    const { box } = laid;
+    if (!isFinite(box.x0) || box.x1 <= box.x0 || box.y1 <= box.y0) {
+        throw new Error("This text produced no glyphs to trace.");
+    }
+
+    const width = Math.ceil((box.x1 - box.x0) * pxPerMm) + PAD_PX * 2,
+        height = Math.ceil((box.y1 - box.y0) * pxPerMm) + PAD_PX * 2;
+    canvas.width = width;
+    canvas.height = height;
+    // Resizing a canvas resets its context, so the whole layout goes back on.
+    layOut(pxPerMm);
+    ctx.fillStyle = "#000";
+
+    for (const g of laid.aGlyph) {
+        const theta = (k * g.s) / g.radius,
+            b = arcPoint(g.s, 0, 0, g.radius, o.arcSide, centre),
+            bx = (b.x - box.x0) * pxPerMm + PAD_PX,
+            by = (b.y - box.y0) * pxPerMm + PAD_PX;
+        // Exactly the transform arcPoint applies, so a point (dx, dy) of the
+        // glyph lands where the box measured above said it would.
+        ctx.setTransform(Math.cos(theta), Math.sin(theta), -Math.sin(theta), Math.cos(theta), bx, by);
+        ctx.fillText(g.ch, -g.advance / 2, 0);
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+    return {
+        img: {
+            width,
+            height,
+            rgba: ctx.getImageData(0, 0, width, height).data,
+            sourceWidth: width,
+            sourceHeight: height,
+            href: "",
+            mode: "outline"
+        },
+        widthMm: width / pxPerMm,
+        pxPerMm,
+        fontPx: laid.fontPx,
+        // Bent text has no straight baseline to hang a pen position off, and
+        // nothing downstream asks it for one: the seams re-derive their own.
+        aPen: [],
+        aRun: []
+    };
+};
+
+/**
+ * The separately traced glyphs, moved onto the arc.
+ *
+ * Only the engraved letter seams need this now — the letters themselves are
+ * rasterised bent. A seam is an overlay line rather than a cut edge, so moving
+ * an already-traced outline rigidly is accurate enough for it, and it saves
+ * setting every glyph a second time.
+ */
+const bendToArc = (aGlyph: TracedGlyph[], r: Rendered, o: TextOptions, plan: ArcPlan): TracedGlyph[] => {
+    const O: Point = { x: 0, y: 0 },
+        aRunMm = r.aRun.map(q => ({ x: q.x / r.pxPerMm, y: q.y / r.pxPerMm, width: q.width / r.pxPerMm })),
+        lineOf = (pen: Point): number => {
+            let best = 0, gap = Infinity;
+            aRunMm.forEach((q, i) => {
+                const d = Math.abs(q.y - pen.y);
+                if (d < gap) { gap = d; best = i; }
+            });
+            return best;
+        };
+
+    return aGlyph.map(g => {
+        const i = lineOf(g.pen),
+            run = aRunMm[i]!,
+            radius = plan.aRadius[i] ?? plan.aRadius[0] ?? Math.max(1, o.arcRadius),
+            // The glyph turns to face the middle of its own ink, which for a
+            // single character is close enough to the middle of its advance
+            // that nothing could see the difference on the bed.
+            mid = (g.box.x0 + g.box.x1) / 2,
+            s = mid - (run.x + run.width / 2),
+            rings = g.rings.map(a => a.map(p => arcPoint(s, p.y - g.pen.y, p.x - mid, radius, o.arcSide, O)));
+        return { rings, box: ringBounds(rings), pen: arcPoint(s, 0, 0, radius, o.arcSide, O) };
+    });
 };
 
 // ---------------------------------------------------------------------------
@@ -597,6 +932,8 @@ interface GlyphCache {
     /** filled in the first time the letter edges are actually asked for */
     aEdge: Point[][] | null;
     edgeWarnings: string[];
+    /** the arc the letters were bent round, in radians; 0 for a straight line */
+    sweep: number;
 }
 
 let cache: GlyphCache | null = null;
@@ -604,7 +941,8 @@ let cache: GlyphCache | null = null;
 /** Everything the glyphs depend on, and nothing else. */
 const glyphKey = (o: TextOptions): string => [
     o.text, o.fontFamily, o.bold, o.italic, o.capHeight,
-    o.letterSpacing, o.wordSpacing, o.lineHeight, o.align, o.smooth, o.simplify
+    o.letterSpacing, o.wordSpacing, o.lineHeight, o.align, o.smooth, o.simplify,
+    o.shape, o.shape === "arc" ? o.arcRadius : 0, o.shape === "arc" ? o.arcSide : ""
 ].join(" ");
 
 /** Set the text and trace it — or hand back the last time we did. */
@@ -617,15 +955,23 @@ const tracedGlyphs = (o: TextOptions, bEdges: boolean): GlyphCache => {
 
     // A cache hit that only lacks the edges keeps the glyphs it already has.
     let entry = cache?.key === key ? cache : null;
+
+    // The arc is a different *render* and the same everything else. Both shapes
+    // come out of one canvas and go through one trace, which is what keeps a
+    // bent word exactly as faithful — and exactly as welded — as a straight one.
+    const plan = o.shape === "arc" ? planArc(o, rendered) : null,
+        source = o.shape === "arc" ? renderArcText(o) : rendered;
+    if (!source) throw new Error("Type something for the laser to cut.");
+
     if (!entry) {
-        const prep = prepareTrace(rendered.img, { mode: "outline", threshold: 128, invert: false, alpha: true }),
-            traced = buildTrace(rendered.img, prep, {
+        const prep = prepareTrace(source.img, { mode: "outline", threshold: 128, invert: false, alpha: true }),
+            traced = buildTrace(source.img, prep, {
                 minArea: MIN_AREA_PX,
                 smooth: o.smooth,
                 optimize: o.simplify,
                 prune: 0,
                 style: "fill",
-                widthMm: rendered.widthMm
+                widthMm: source.widthMm
             }),
             aGlyph = traced.aSub.map(sub => sub.points);
         if (!aGlyph.length) throw new Error("This text produced no glyphs to trace.");
@@ -638,16 +984,27 @@ const tracedGlyphs = (o: TextOptions, bEdges: boolean): GlyphCache => {
             // has more nodes than it will draw. There is no such overlay here,
             // and type at a faithful setting always trips it — so it would be a
             // permanent notice about a control this tool does not have.
-            warnings: traced.warnings.filter(w => !w.includes("nodes —")),
+            warnings: [...traced.warnings.filter(w => !w.includes("nodes —")), ...(plan?.warnings ?? [])],
             aEdge: null,
-            edgeWarnings: []
+            edgeWarnings: [],
+            sweep: plan?.sweep ?? 0
         };
     }
 
     if (bEdges && !entry.aEdge) {
-        const edges = traceGlyphEdges(o, rendered);
-        entry.aEdge = edges.rings;
-        entry.edgeWarnings = edges.warnings;
+        if (plan) {
+            // Traced straight and then moved onto the curve: a seam is drawn on
+            // top of the letters rather than cut, so a rigid move of an outline
+            // that is already a trace is close enough, and it saves setting
+            // every glyph a second time at its own angle.
+            const each = traceEachGlyph(o, rendered, "got their own engraved edge");
+            entry.aEdge = clipToSeams(bendToArc(each.aGlyph, rendered, o, plan), o.capHeight * 0.06);
+            entry.edgeWarnings = each.warnings;
+        } else {
+            const edges = traceGlyphEdges(o, rendered);
+            entry.aEdge = edges.rings;
+            entry.edgeWarnings = edges.warnings;
+        }
     }
 
     cache = entry;
@@ -825,6 +1182,7 @@ export const buildTextDesign = (o: TextOptions): TextResult => {
         pieces: aPlate.length + aHole.length + aOpenCut.length + (o.letters === "cut" ? aGlyph.length : 0),
         accuracy,
         autoReach,
+        arcSweep: glyphs.sweep,
         ring: o.ring ? { x: centre.x - box.x0, y: centre.y - box.y0 } : null,
         // What the hole is positioned against, in the same coordinates — so a
         // drag on the canvas can be turned back into an edge and an offset.

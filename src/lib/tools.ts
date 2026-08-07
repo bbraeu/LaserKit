@@ -72,13 +72,13 @@ export const TOOLS: ToolDef[] = [
         slug: "text/",
         label: "Text generator",
         short: "Text",
-        hint: "type → keychain · sign · stencil",
-        blurb: "Set a word in any font on your machine and get it back as cuttable geometry — welded into one plate, with a keyring hole where you want it.",
+        hint: "type → keychain · sign · badge",
+        blurb: "Set a word in any font on your machine and get it back as cuttable geometry — straight or curved round a circle, welded into one plate, with a keyring hole where you want it.",
         // A capital T on a baseline: the one glyph that reads as "text" at 20 px.
         icon: "M4.5 5.25h15M12 5.25V19.5M8.25 19.5h7.5",
         accepts: ".ttf, .otf, .woff, .woff2",
-        title: "Text to SVG for laser cutting — keychains, signs and stencils | LaserKit",
-        description: "Free in-browser text generator for laser cutting: set a word in any font installed on your machine, weld the letters into one plate, add a keyring hole and export DXF, Falcon Design Space (.fds) or SVG. No font upload needed, nothing leaves your browser."
+        title: "Text to SVG for laser cutting — keychains, curved text and stencils | LaserKit",
+        description: "Free in-browser text generator for laser cutting: set a word in any font installed on your machine, straight or curved round a circle for a badge, weld the letters into one plate, add a keyring hole and export DXF, Falcon Design Space (.fds) or SVG. No font upload needed, nothing leaves your browser."
     },
     {
         id: "box",
