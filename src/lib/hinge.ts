@@ -229,6 +229,60 @@ const slitPath = (x: number, y0: number, y1: number, o: HingeOptions, pitch: num
  */
 const teeBar = (x: number, y: number, half: number): Point[] => [{ x: x - half, y }, { x: x + half, y }];
 
+/**
+ * Just the slits, for something else to put a corner in.
+ *
+ * The box generator's rounded corners are this and nothing else: a strip of
+ * hinge dropped into a wall that wraps. It gets the field rather than a copy of
+ * the code, so a fix to the brick bond or to how the rows are rounded reaches
+ * both tools — and so the two never quietly disagree about what a link is.
+ *
+ * `bend` runs across the slits (the direction the panel curls) and `run` along
+ * them. The rings come back in a `bend` × `run` box with the slits parallel to
+ * the second axis; whoever asked for them decides where that box lands.
+ */
+export const hingeField = (o: {
+    bend: number;
+    run: number;
+    pattern: HingePattern;
+    pitch: number;
+    link: number;
+    slit: number;
+    kerf: number;
+    amplitude?: number;
+}): { rings: Point[][]; rows: number; pitch: number; slit: number } => {
+    const opt: HingeOptions = {
+        width: Math.max(HINGE_LIMITS.minSize, o.bend),
+        height: Math.max(HINGE_LIMITS.minSize, o.run),
+        bendAxis: "vertical",
+        pattern: o.pattern,
+        pitch: o.pitch,
+        link: o.link,
+        slit: o.slit,
+        inset: 0,
+        flat: 0,
+        thickness: 3,
+        kerf: o.kerf,
+        radius: 40,
+        outline: false,
+        amplitude: o.amplitude ?? 0.25
+    };
+    const field = layField(opt, Math.max(1, o.bend), Math.max(1, o.run)),
+        rings: Point[][] = [],
+        half = Math.min(field.pitch * 0.35, Math.max(0.5, field.pitch / 2 - o.kerf));
+
+    for (const col of field.aColumn) {
+        for (const [a, b] of col.aSpan) {
+            rings.push(slitPath(col.x, a, b, opt, field.pitch));
+            if (o.pattern === "tee") {
+                if (a > 0.01) rings.push(teeBar(col.x, a, half));
+                if (b < o.run - 0.01) rings.push(teeBar(col.x, b, half));
+            }
+        }
+    }
+    return { rings, rows: field.aColumn.length, pitch: field.pitch, slit: field.slit };
+};
+
 // ---------------------------------------------------------------------------
 
 export const buildHinge = (o: HingeOptions): HingeResult => {

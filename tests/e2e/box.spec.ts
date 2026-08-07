@@ -53,6 +53,50 @@ test.describe("a tool with nothing to open", () => {
     });
 });
 
+test.describe("rounded corners", () => {
+    const round = async (page: Page, radius: number): Promise<void> => {
+        await openSection(page, "Corners");
+        await setNum(page, "Radius", radius);
+    };
+
+    test("turns four walls into one band that wraps", async ({ page }) => {
+        await expect(stat(page, "Parts")).toContainText("5");
+        await round(page, 25);
+        // A bottom and a wall. That is the whole box.
+        await expect(stat(page, "Parts")).toContainText("2");
+    });
+
+    test("drops the floor-joint control, because a wrapped wall has one answer", async ({ page }) => {
+        await expect(panel(page).getByRole("radio", { name: "At the edge" })).toBeVisible();
+        await round(page, 25);
+        await expect(panel(page).getByRole("radio", { name: "At the edge" })).toHaveCount(0);
+        await expect(panel(page)).toContainText("no edge for the floor to notch into");
+    });
+
+    test("says a clamshell cannot be wrapped, rather than drawing a lie", async ({ page }) => {
+        await round(page, 25);
+        await panel(page).getByRole("combobox", { name: "Type" }).click();
+        await page.getByRole("option", { name: /Hinged lid/ }).click();
+        await expect(page.getByTestId("statusbar")).toContainText(/\d note/);
+        await page.getByTestId("statusbar").getByRole("button", { name: /notes?$/ }).hover();
+        await expect(page.getByRole("tooltip")).toContainText("no side walls");
+    });
+
+    test("goes back to a square box when the radius goes back to 0", async ({ page }) => {
+        // The whole feature has to be inert at 0, or every box anyone has cut
+        // from this tool changes shape on the next deploy. The label is stripped
+        // because innerText puts a newline after it and toHaveText normalises.
+        const sheet = async () => (await stat(page, "Sheet").innerText()).replace(/^Sheet\s*/, "");
+        const square = await sheet();
+
+        await round(page, 25);
+        await expect(stat(page, "Parts")).toContainText("2");
+        await setNum(page, "Radius", 0);
+        await expect(stat(page, "Parts")).toContainText("5");
+        await expect.poll(sheet).toBe(square);
+    });
+});
+
 test.describe("size", () => {
     test("reports the outside and the space left inside", async ({ page }) => {
         await expect(stat(page, "Outside")).toContainText("120.0 × 90.0 × 60.0 mm");

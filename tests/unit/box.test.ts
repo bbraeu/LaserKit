@@ -18,6 +18,10 @@ const BASE: BoxOptions = {
     clearance: 0,
     finger: 0,
     lid: "none",
+    cornerRadius: 0,
+    cornerPattern: "tee",
+    cornerPitch: 3,
+    cornerLink: 6,
     panelJoint: "edge",
     panelOffset: 6,
     lidClearance: 0.1,
@@ -38,6 +42,124 @@ const box = (patch: Partial<BoxOptions> = {}) => buildBox({ ...BASE, ...patch })
 /** Every part, at its own origin, so a panel can be measured on its own. */
 const partSizes = (o: Partial<BoxOptions> = {}) =>
     Object.fromEntries(box(o).aPart.map(p => [p.label, { w: p.width, h: p.height }]));
+
+describe("rounded corners", () => {
+    const round = (o: Partial<BoxOptions> = {}) => box({ cornerRadius: 25, ...o });
+
+    it("makes one wall instead of four", () => {
+        expect(box().aPart.length).toBe(5);
+        // A bottom and a band. That is the whole box.
+        expect(round().aPart.map(p => p.label)).toEqual(["Bottom", "Wall"]);
+    });
+
+    it("cuts the band exactly as long as the floor's edge is round", () => {
+        // The band's inner face lies against the plate's edge, so they are the
+        // same curve. A lattice hinge does not stretch — the strips keep their
+        // own length and turn — so the developed length is the inner path, and
+        // getting this wrong is a box whose ends do not meet.
+        for (const [W, D, r, t] of [[120, 90, 25, 3], [200, 200, 40, 4], [80, 60, 15, 3]]) {
+            const res = round({ width: W, depth: D, cornerRadius: r, thickness: t }),
+                band = res.aPart.find(p => p.label === "Wall")!,
+                comb = Math.max(2 * t, 6),
+                perimeter = 2 * (W - 2 * r) + 2 * (D - 2 * r) + 2 * Math.PI * (r - t);
+            // The band is the perimeter plus the comb teeth standing off one end.
+            expect(band.width - comb).toBeCloseTo(perimeter, 1);
+        }
+    });
+
+    it("gives every tenon on the plate a mortise in the band", () => {
+        const res = round(),
+            plate = res.aPart.find(p => p.label === "Bottom")!,
+            band = res.aPart.find(p => p.label === "Wall")!;
+        // The band's rings are its outline plus one mortise each; the plate is
+        // a single ring whose tenons are steps in it. Counting the mortises is
+        // the honest half — that they *line up* is what walkRound guarantees by
+        // laying both out on the same number line.
+        expect(band.note).toContain("hinged at each corner");
+        expect(plate.note).toContain("through the band");
+        expect(res.pieces).toBeGreaterThan(2);
+    });
+
+    it("never lets a corner's slits cut the band in two", () => {
+        // Every slit runs up the band. If one reached both edges the wall would
+        // fall into two straps, and nothing on the canvas would say so.
+        const res = round(),
+            open = res.aLayer.find(l => l.open)!;
+        expect(open.rings.length).toBeGreaterThan(20);
+        const b = ringBounds(open.rings);
+        for (const a of open.rings) {
+            const s = ringBounds([a]);
+            expect(s.y1 - s.y0).toBeLessThan(b.y1 - b.y0);
+        }
+    });
+
+    it("keeps the slits inside the band", () => {
+        const res = round(),
+            open = res.aLayer.find(l => l.open)!,
+            cut = res.aLayer.find(l => !l.open)!,
+            slits = ringBounds(open.rings),
+            all = ringBounds(cut.rings);
+        expect(slits.x0).toBeGreaterThanOrEqual(all.x0 - 0.01);
+        expect(slits.x1).toBeLessThanOrEqual(all.x1 + 0.01);
+        expect(slits.y0).toBeGreaterThanOrEqual(all.y0 - 0.01);
+        expect(slits.y1).toBeLessThanOrEqual(all.y1 + 0.01);
+    });
+
+    it("carries the floor on tenons whatever the joint control says", () => {
+        // There is no wall edge to notch against round a curve, so "at the
+        // edge" cannot be built. It is not offered in the panel either.
+        const res = round({ panelJoint: "edge" });
+        expect(res.aPart.find(p => p.label === "Bottom")!.note).toContain("tenons");
+        // One thickness up from the bottom, which is the least it can be.
+        expect(res.inner.h).toBeCloseTo(60 - 3 - 3);
+    });
+
+    it("rounds the lid to match, and its lip to the opening", () => {
+        const res = round({ lid: "layon" });
+        expect(res.aPart.map(p => p.label)).toContain("Lid");
+        expect(res.aPart.map(p => p.label)).toContain("Lid lip");
+    });
+
+    it("wraps a tray lid too, on its own slightly larger circle", () => {
+        const res = round({ lid: "tray" });
+        expect(res.aPart.filter(p => p.label.startsWith("Lid ")).length).toBe(2);
+    });
+
+    it("closes the box with a second rounded plate", () => {
+        const res = round({ lid: "finger" });
+        expect(res.aPart.map(p => p.label)).toEqual(["Bottom", "Wall", "Top"]);
+    });
+
+    it("refuses to wrap a clamshell, and says why", () => {
+        // The strap hinge grows a knuckle out of a side wall, and a box that
+        // wraps has no side walls.
+        const res = round({ lid: "hinged" });
+        expect(res.warnings.some(s => /clamshell cannot have rounded corners/.test(s))).toBe(true);
+        expect(res.aLayer.some(l => l.open)).toBe(false);
+        // …and it is still a box rather than nothing.
+        expect(res.aPart.length).toBeGreaterThan(5);
+    });
+
+    it("says when the corners have eaten the straight runs", () => {
+        expect(round({ width: 60, depth: 60, cornerRadius: 29 }).warnings
+            .some(s => /nowhere for the floor's tenons/.test(s))).toBe(true);
+    });
+
+    it("says when the corner is tight for the sheet", () => {
+        expect(round({ cornerRadius: 8, thickness: 3 }).warnings
+            .some(s => /test strip in the living hinge tool/.test(s))).toBe(true);
+    });
+
+    it("leaves a square box exactly as it was", () => {
+        // The whole feature has to be inert at 0, or every box anyone has ever
+        // cut from this tool changes shape on the next deploy.
+        const square = box(),
+            zero = box({ cornerRadius: 0, cornerPattern: "wave", cornerPitch: 9, cornerLink: 1 });
+        expect(zero.aPart).toEqual(square.aPart);
+        expect(zero.cutLength).toBeCloseTo(square.cutLength);
+        expect(zero.aLayer.some(l => l.open)).toBe(false);
+    });
+});
 
 describe("finger segments", () => {
     it("is always odd, so both ends of a joint are the same kind", () => {

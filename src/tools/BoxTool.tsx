@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from "react";
-import { Box as BoxIcon, Columns3, Layers3, Ruler, Tag } from "lucide-react";
+import { Box as BoxIcon, Columns3, Layers3, Ruler, Spline, Tag } from "lucide-react";
 import { BOX_LIMITS, boxToDxf, boxToFds, boxToSvg, buildBox } from "../lib/box";
 import type { BoxOptions, DimMode, LidType, PanelJoint } from "../lib/box";
+import type { HingePattern } from "../lib/hinge";
 import { PanelSection } from "../workspace/PanelSection";
 import { PresetList } from "../workspace/PresetList";
 import type { Preset } from "../workspace/PresetList";
@@ -57,6 +58,13 @@ const DEFAULTS: BoxParams = {
     clearance: 0,
     finger: 0,
     lid: "none",
+    // Square, because that is what a box is until you decide otherwise — and
+    // because rounding the corners changes what gets cut rather than just how
+    // it looks: four walls become one band that has to be bent.
+    cornerRadius: 0,
+    cornerPattern: "tee",
+    cornerPitch: 3,
+    cornerLink: 6,
     panelJoint: "edge",
     panelOffset: 6,
     lidClearance: 0.1,
@@ -88,6 +96,12 @@ const LIDS = [
 const JOINTS = [
     { id: "edge" as const, label: "At the edge", hint: "The floor sits in the very bottom of the walls and its edge is part of the outside. The usual box." },
     { id: "offset" as const, label: "Inset", hint: "The floor is raised, and passes through the walls on visible through-tenons. The walls carry on below it as a plinth — feet, or somewhere to hide a cable." }
+];
+
+const CORNER_PATTERNS = [
+    { id: "tee" as const, label: "T-ends", hint: "Straight slits with a bar across each end. A slit tip piles all the stress in the link onto one point, and that point is where a corner cracks; a bar spreads it along a line. The right default for something that has to be bent once and stay bent." },
+    { id: "straight" as const, label: "Straight", hint: "Plain slits. Quickest to cut and the stiffest, which for a shallow corner is all you need." },
+    { id: "wave" as const, label: "Wave", hint: "Each slit runs as one S, so the material at the end of it is never asked to turn a corner. The most forgiving of the three, and visible on the finished box." }
 ];
 
 const PRESETS: Preset<BoxParams>[] = [
@@ -127,6 +141,7 @@ const mm = (n: number): string => `${n.toFixed(1)} mm`;
 const xyz = (o: { w: number; d: number; h: number }): string => `${o.w.toFixed(1)} × ${o.d.toFixed(1)} × ${o.h.toFixed(1)} mm`;
 
 export default function BoxTool() {
+    const base = import.meta.env.BASE_URL;
     const params = useHistoryParams<BoxParams>(DEFAULTS, { storageKey: "laserkit:params:box" });
     const p = params.value;
 
@@ -146,7 +161,8 @@ export default function BoxTool() {
         fitKey: [
             p.dims, p.width, p.depth, p.height, p.thickness, p.finger, p.lid,
             p.panelJoint, p.panelOffset, p.lidHeight, p.lidLip, p.dividersW,
-            p.dividersD, p.sheetWidth, p.gap
+            p.dividersD, p.sheetWidth, p.gap,
+            p.cornerRadius, p.cornerPattern, p.cornerPitch, p.cornerLink
         ].join("|"),
         fallbackError: "This box could not be worked out."
     });
@@ -338,14 +354,25 @@ export default function BoxTool() {
                         back to following the sheet
                     </button>
                 )}
-                <SegmentedField
-                    label="Floor & lid"
-                    hint={JOINTS.find(o => o.id === p.panelJoint)!.hint}
-                    value={p.panelJoint}
-                    choices={JOINTS}
-                    onChange={(v: PanelJoint) => params.set({ panelJoint: v }, { label: "Floor joint" })}
-                />
-                {p.panelJoint === "offset" && (
+                {/* A wrapped wall has no edge for a plate to notch into, so a
+                    rounded box has only one answer here. Offering the other
+                    would be offering something that cannot be built. */}
+                {p.cornerRadius === 0 ? (
+                    <SegmentedField
+                        label="Floor & lid"
+                        hint={JOINTS.find(o => o.id === p.panelJoint)!.hint}
+                        value={p.panelJoint}
+                        choices={JOINTS}
+                        onChange={(v: PanelJoint) => params.set({ panelJoint: v }, { label: "Floor joint" })}
+                    />
+                ) : (
+                    <p className="text-[11px] leading-relaxed text-subtle-foreground">
+                        A wall that wraps has no edge for the floor to notch into, so a rounded box carries its floor
+                        on through-tenons — and only along the straight runs, because a tenon in a corner would sit in
+                        material that has been cut into strips.
+                    </p>
+                )}
+                {(p.panelJoint === "offset" || p.cornerRadius > 0) && (
                     <>
                         <SliderField
                             label="Inset by"
@@ -359,6 +386,55 @@ export default function BoxTool() {
                             The walls stay {result ? mm(result.outer.h) : "the same height"} and the floor moves up
                             them, so the room left inside drops to{" "}
                             <span className="text-muted-foreground">{mm(innerH)}</span>.
+                        </p>
+                    </>
+                )}
+            </PanelSection>
+
+            {/* ── Square, or wrapped ─────────────────────────────────────── */}
+            <PanelSection id="box-corners" title="Corners" icon={<Spline className="size-3" />} defaultOpen={false}>
+                <SliderField
+                    label="Radius"
+                    hint="0 is a box: four walls, eight corners, finger joints. Anything above it makes a different object — the four walls become one band that wraps all the way round and bends at each corner through a living hinge cut into it, and the floor becomes a rounded plate. Measured on the outside."
+                    value={p.cornerRadius}
+                    min={0}
+                    max={Math.max(1, Math.min(p.width, p.depth) / 2 - p.thickness)}
+                    onChange={n => params.set({ cornerRadius: n }, { label: "Corner radius", coalesce: "cornerRadius" })}
+                />
+                {p.cornerRadius > 0 && (
+                    <>
+                        <SelectField
+                            label="Cut"
+                            hint={CORNER_PATTERNS.find(o => o.id === p.cornerPattern)!.hint}
+                            value={p.cornerPattern}
+                            choices={CORNER_PATTERNS}
+                            onChange={(v: HingePattern) => params.set({ cornerPattern: v }, { label: "Corner pattern" })}
+                        />
+                        <SliderField
+                            label="Row spacing"
+                            hint={`How far apart the slits are round the corner. Each row has to twist the spacing over the radius, so at ${mm(p.cornerRadius)} these rows turn about ${((p.cornerPitch / Math.max(1, p.cornerRadius - p.thickness)) * 180 / Math.PI).toFixed(1)}° each. Closer rows bend more easily and take longer to cut.`}
+                            value={p.cornerPitch}
+                            min={1}
+                            max={12}
+                            step={0.5}
+                            onChange={n => params.set({ cornerPitch: n }, { label: "Row spacing", coalesce: "cornerPitch" })}
+                        />
+                        <SliderField
+                            label="Link"
+                            hint="The uncut material between two slits end to end. It is what twists and what breaks — longer links bend further, shorter ones are stiffer and snap. The beam takes a full kerf out of every one of them."
+                            value={p.cornerLink}
+                            min={1}
+                            max={20}
+                            step={0.5}
+                            onChange={n => params.set({ cornerLink: n }, { label: "Link", coalesce: "cornerLink" })}
+                        />
+                        <p className="text-[11px] leading-relaxed text-subtle-foreground">
+                            One wall instead of four, and one seam: the two ends comb together in the middle of the
+                            back. Bend a corner as a test strip in the{" "}
+                            <a href={`${base}hinge/`} className="text-accent/80 underline decoration-accent/40 underline-offset-2 transition-colors hover:text-accent">
+                                living hinge tool
+                            </a>{" "}
+                            before you commit a sheet — same pattern, same numbers.
                         </p>
                     </>
                 )}

@@ -2,6 +2,8 @@ import { arcSegments, circleRing, dedupe, pathData, r3, rectRing, ringBounds, sh
 import { OPERATION_COLORS, buildDxf } from "./dxf";
 import type { DxfEntity, Operation, Point } from "./dxf";
 import { buildFds } from "./fds";
+import { hingeField } from "./hinge";
+import type { HingePattern } from "./hinge";
 
 // ---------------------------------------------------------------------------
 // Finger-jointed boxes, cut flat.
@@ -99,6 +101,21 @@ export interface BoxOptions {
     clearance: number;
     /** target finger width, mm; 0 = three times the thickness */
     finger: number;
+
+    /**
+     * Outer corner radius, mm. 0 is a box with four walls and eight corners.
+     *
+     * Anything above that changes what the box *is*: the four walls become one
+     * band that wraps all the way round, bending at each corner through a
+     * living hinge cut into it, and the floor becomes a rounded plate the band
+     * is wrapped against.
+     */
+    cornerRadius: number;
+    cornerPattern: HingePattern;
+    /** row spacing of the slits in a corner, mm */
+    cornerPitch: number;
+    /** uncut material between two slits end to end, mm */
+    cornerLink: number;
     lid: LidType;
     /** bottom flush with the walls' edge, or inset by `panelOffset` */
     panelJoint: PanelJoint;
@@ -138,6 +155,8 @@ export interface BoxPart {
 export interface BoxLayer {
     operation: Operation;
     rings: Point[][];
+    /** open polylines: a slit has no inside to cut out */
+    open?: boolean;
 }
 
 export interface BoxResult {
@@ -182,6 +201,8 @@ interface Part {
     note: string;
     cut: Point[][];
     engrave: Point[][];
+    /** open lines rather than closed contours — the slits of a corner hinge */
+    slits?: Point[][];
 }
 
 /** Every number the joints are cut from, worked out once. */
@@ -712,6 +733,235 @@ const buildShell = (c: Cut, s: ShellSpec): Part[] => {
     return aPart;
 };
 
+
+// ---------------------------------------------------------------------------
+// Rounded corners
+//
+// A box with rounded corners is not a box with the corners filed off — it is a
+// different object. The four walls become **one band** that wraps all the way
+// round, and at each corner the band bends through a living hinge cut into it.
+// So there is one wall part instead of four, it has two ends that have to meet,
+// and the floor is a rounded plate the band is wrapped against.
+//
+// Three things follow, and they are what this section is.
+//
+// *The band's length is the floor's perimeter.* Not an approximation: the
+// band's inner face lies against the floor's edge, so they are the same curve.
+// A lattice hinge does not stretch — the strips between the slits stay their
+// own length and turn relative to each other — so the developed length is the
+// path at the inner face, and the straight runs come out as W − 2r and D − 2r
+// on both parts by construction rather than by agreement.
+//
+// *The floor cannot be notched for fingers.* There is no wall edge to notch
+// against round a curve, so the floor carries through-tenons and the band has
+// mortises — the joint this generator already had for an inset floor. Tenons go
+// only on the straight runs: one in a corner would sit in material that has
+// been cut into strips.
+//
+// *The seam goes in the middle of the back.* The two ends of the band meet in
+// an in-plane comb joint, which wants flat material and somewhere unobtrusive.
+// The middle of the back run is the flattest, least-seen place on the box, and
+// putting it there costs only that the back's tenons are laid out as two halves
+// rather than one run.
+// ---------------------------------------------------------------------------
+
+/** One leg of the walk round the floor's edge. */
+interface Leg {
+    /** how far along the band this leg starts */
+    at: number;
+    length: number;
+    /** a straight run carries tenons; an arc carries a hinge */
+    straight: boolean;
+}
+
+/**
+ * The perimeter of a rounded plate, walked from the middle of its back edge.
+ *
+ * The same walk lays out the plate's tenons and the band's mortises, so the two
+ * cannot drift apart: a tenon and its mortise are the same interval of the same
+ * number line, read once on a curve and once on a straight strip.
+ */
+const walkRound = (w: number, h: number, rho: number): Leg[] => {
+    const runW = Math.max(0, w - 2 * rho),
+        runH = Math.max(0, h - 2 * rho),
+        arc = (Math.PI / 2) * rho,
+        aLen = [runW / 2, arc, runH, arc, runW, arc, runH, arc, runW / 2],
+        out: Leg[] = [];
+    let at = 0;
+    aLen.forEach((length, i) => {
+        out.push({ at, length, straight: i % 2 === 0 });
+        at += length;
+    });
+    return out;
+};
+
+/**
+ * The rounded floor (or lid) plate, with tenons out of its straight runs.
+ *
+ * Walked in the same order as `walkRound`, so leg n of one is leg n of the
+ * other. The plate starts at the middle of its back edge and goes clockwise.
+ */
+const roundPlateRing = (c: Cut, w: number, h: number, rho: number, aLeg: Leg[]): Point[] => {
+    const out: Point[] = [],
+        segs = arcSegments(rho, Math.PI / 2);
+
+    /** A straight run with its tenons standing out of it. */
+    const straight = (from: Point, dir: Point, out2: Point, length: number): void => {
+        const put = (d: number, o: number): void => {
+            out.push({ x: from.x + dir.x * d + out2.x * o, y: from.y + dir.y * d + out2.y * o });
+        };
+        put(0, 0);
+        for (const sp of tenonSpans(c, length)) {
+            // Half a kerf wider than nominal on each side, so the tenon comes
+            // out the size it was drawn once the beam has been through it.
+            const s = sp.s - c.growM, e = sp.e + c.growM;
+            put(s, 0);
+            put(s, c.t);
+            put(e, c.t);
+            put(e, 0);
+        }
+        put(length, 0);
+    };
+
+    const corner = (cx: number, cy: number, a0: number): void => {
+        for (let i = 0; i <= segs; i++) {
+            const a = a0 + (Math.PI / 2) * (i / segs);
+            out.push({ x: cx + rho * Math.cos(a), y: cy + rho * Math.sin(a) });
+        }
+    };
+
+    const runW = Math.max(0, w - 2 * rho),
+        runH = Math.max(0, h - 2 * rho);
+
+    // Clockwise from the middle of the back (y = 0), matching walkRound.
+    straight({ x: w / 2, y: 0 }, { x: 1, y: 0 }, { x: 0, y: -1 }, aLeg[0]!.length);
+    corner(w - rho, rho, -Math.PI / 2);
+    straight({ x: w, y: rho }, { x: 0, y: 1 }, { x: 1, y: 0 }, runH);
+    corner(w - rho, h - rho, 0);
+    straight({ x: w - rho, y: h }, { x: -1, y: 0 }, { x: 0, y: 1 }, runW);
+    corner(rho, h - rho, Math.PI / 2);
+    straight({ x: 0, y: h - rho }, { x: 0, y: -1 }, { x: -1, y: 0 }, runH);
+    corner(rho, rho, Math.PI);
+    straight({ x: rho, y: 0 }, { x: 1, y: 0 }, { x: 0, y: -1 }, aLeg[8]!.length);
+
+    return dedupe(out);
+};
+
+interface BandSpec {
+    W: number;
+    D: number;
+    H: number;
+    /** outer corner radius */
+    radius: number;
+    bottom: boolean;
+    top: boolean;
+    prefix: string;
+    pattern: HingePattern;
+    pitch: number;
+    link: number;
+}
+
+/** A wall that wraps: one band, four hinged corners, a comb joint at the seam. */
+const buildBand = (c: Cut, s: BandSpec): Part[] => {
+    const { t } = c,
+        // The plate is inset by a thickness all round and its corners are that
+        // much tighter, which is exactly what keeps the two straight runs the
+        // same length on both parts.
+        w = s.W - 2 * t,
+        h = s.D - 2 * t,
+        rho = Math.max(0.5, s.radius - t),
+        aLeg = walkRound(w, h, rho),
+        length = aLeg[aLeg.length - 1]!.at + aLeg[aLeg.length - 1]!.length,
+        wallH = s.H,
+        aPart: Part[] = [];
+
+    // ── the plates ──────────────────────────────────────────────────────
+    const plate = (bTop: boolean): void => {
+        const ring = roundPlateRing(c, w, h, rho, aLeg),
+            b = ringBounds([ring]);
+        aPart.push({
+            label: `${s.prefix}${s.prefix ? (bTop ? "top" : "bottom") : bTop ? "Top" : "Bottom"}`,
+            note: `${size(b.x1 - b.x0, b.y1 - b.y0)} — a rounded plate; its tenons pass through the band `
+                + `${mm(c.offset)} in from the ${bTop ? "top" : "bottom"}, and only along the straight runs`,
+            cut: [ring],
+            engrave: []
+        });
+    };
+    if (s.bottom) plate(false);
+
+    // ── the band ────────────────────────────────────────────────────────
+    //
+    // A rectangle `length` × `wallH`, with a comb joint on the two ends that
+    // meet. The comb is in the plane of the material rather than across a
+    // corner, so it is a glue joint with teeth rather than a mechanical one —
+    // which is all a wrapped wall can have, and all it needs once the floor is
+    // tenoned through it.
+    const comb = Math.max(2 * t, 6),
+        nComb = fingerSegments(wallH, c.finger),
+        endJoint = (kind: EdgeKind): Joint => ({
+            kind,
+            length: wallH,
+            from: 0,
+            to: wallH,
+            outside: 0,
+            depth: comb,
+            n: nComb,
+            endsActive: false,
+            grow: kind === "male" ? c.growM : c.growF
+        }),
+        flat = (len: number): Joint => ({
+            kind: "flat", length: len, from: 0, to: len, outside: 0,
+            depth: 0, n: 1, endsActive: false, grow: 0
+        });
+
+    const ring = panelRing(length, wallH, [
+        flat(length), endJoint("male"), flat(length), endJoint("female")
+    ]);
+
+    // Mortises, at the same intervals of the same walk the tenons came from.
+    const aHole: Point[][] = [],
+        aRow: number[] = [];
+    if (s.bottom) aRow.push(wallH - c.offset - t);
+    if (s.top) aRow.push(c.offset);
+    for (const leg of aLeg) {
+        if (!leg.straight) continue;
+        for (const sp of tenonSpans(c, leg.length)) {
+            for (const y of aRow) aHole.push(mortise(c, leg.at + sp.s, leg.at + sp.e, y, y + t));
+        }
+    }
+
+    // ── the corners ─────────────────────────────────────────────────────
+    const aSlit: Point[][] = [];
+    for (const leg of aLeg) {
+        if (leg.straight) continue;
+        const field = hingeField({
+            bend: leg.length,
+            run: wallH,
+            pattern: s.pattern,
+            pitch: s.pitch,
+            link: s.link,
+            // Slits about a third of the wall, so a corner has three or four of
+            // them up its height rather than one long one that hinges as a
+            // single flap.
+            slit: Math.max(4, wallH / 3),
+            kerf: c.kerf
+        });
+        for (const a of field.rings) aSlit.push(a.map(q => ({ x: q.x + leg.at, y: q.y })));
+    }
+
+    aPart.push({
+        label: `${s.prefix}${s.prefix ? "wall" : "Wall"}`,
+        note: `${size(length, wallH)} — one band all the way round, hinged at each corner; the two ends comb `
+            + `together in the middle of the back`,
+        cut: [ring, ...aHole],
+        engrave: [],
+        slits: aSlit
+    });
+
+    if (s.top) plate(true);
+    return aPart;
+};
+
 // ---------------------------------------------------------------------------
 // Nesting
 // ---------------------------------------------------------------------------
@@ -728,7 +978,7 @@ interface Placed extends Part {
 
 /** Shelf packing in build order: rows across the sheet, then down. */
 const layOut = (aPart: Part[], sheet: number, gap: number): { aPlaced: Placed[]; width: number; height: number; over: number } => {
-    const aBox = aPart.map(p => ringBounds([...p.cut, ...p.engrave])),
+    const aBox = aPart.map(p => ringBounds([...p.cut, ...p.engrave, ...(p.slits ?? [])])),
         over = aBox.filter(b => b.x1 - b.x0 > sheet).length,
         wMax = Math.max(sheet, ...aBox.map(b => b.x1 - b.x0));
 
@@ -746,6 +996,7 @@ const layOut = (aPart: Part[], sheet: number, gap: number): { aPlaced: Placed[];
             ...p,
             cut: moveRings(p.cut, x - b.x0, y - b.y0),
             engrave: moveRings(p.engrave, x - b.x0, y - b.y0),
+            slits: p.slits ? moveRings(p.slits, x - b.x0, y - b.y0) : undefined,
             x, y, w, h
         };
         x += w + gap;
@@ -755,6 +1006,13 @@ const layOut = (aPart: Part[], sheet: number, gap: number): { aPlaced: Placed[];
     });
 
     return { aPlaced, width: wUsed, height: y + hRow, over };
+};
+
+/** How far the head travels along an open line, which does not come back. */
+const openLength = (a: Point[]): number => {
+    let n = 0;
+    for (let i = 1; i < a.length; i++) n += Math.hypot(a[i]!.x - a[i - 1]!.x, a[i]!.y - a[i - 1]!.y);
+    return n;
 };
 
 const ringLength = (a: Point[]): number => {
@@ -780,7 +1038,15 @@ export const buildBox = (opt: BoxOptions): BoxResult => {
         finger = opt.finger > 0
             ? clamp(opt.finger, L.minFinger, L.maxFinger)
             : clamp(FINGER_PER_THICKNESS * t, AUTO_FINGER_MIN, AUTO_FINGER_MAX),
-        offset = opt.panelJoint === "offset" ? clamp(opt.panelOffset, t, L.maxOffset) : 0;
+        // A wrapped wall has no edge for a plate to notch into, so a rounded
+        // box carries its floor on through-tenons whatever the joint control
+        // says — and a clamshell cannot be wrapped at all, because its hinge
+        // knuckle lives on a side wall this box does not have.
+        radius = opt.lid === "hinged" ? 0 : clamp(opt.cornerRadius, 0, L.maxSize),
+        bRound = radius > 0,
+        offset = bRound
+            ? clamp(opt.panelJoint === "offset" ? opt.panelOffset : t, t, L.maxOffset)
+            : opt.panelJoint === "offset" ? clamp(opt.panelOffset, t, L.maxOffset) : 0;
 
     const c: Cut = {
         t,
@@ -788,7 +1054,7 @@ export const buildBox = (opt: BoxOptions): BoxResult => {
         growM: kerf / 2 - clearance,
         growF: -kerf / 2,
         finger,
-        joint: opt.panelJoint,
+        joint: bRound ? "offset" : opt.panelJoint,
         offset
     };
 
@@ -847,6 +1113,17 @@ export const buildBox = (opt: BoxOptions): BoxResult => {
                 engrave: []
             });
         }
+    } else if (radius > 0) {
+        aPart.push(...buildBand(c, {
+            W, D, H,
+            radius,
+            bottom: true,
+            top: opt.lid === "finger",
+            prefix: "",
+            pattern: opt.cornerPattern,
+            pitch: opt.cornerPitch,
+            link: opt.cornerLink
+        }));
     } else {
         aPart.push(...buildShell(c, {
             W, D, H,
@@ -858,10 +1135,12 @@ export const buildBox = (opt: BoxOptions): BoxResult => {
 
     // ── lids that are not part of a shell ───────────────────────────────
     if (opt.lid === "layon") {
-        const plate = rectRing({ x0: 0, y0: 0, x1: W, y1: D }, 0),
+        const plate = rectRing({ x0: 0, y0: 0, x1: W, y1: D }, radius),
             lipW = W - 2 * t - 2 * play,
             lipD = D - 2 * t - 2 * play,
-            lip = rectRing({ x0: 0, y0: 0, x1: lipW, y1: lipD }, 0);
+            // The lip drops into the opening, so it follows the opening's own
+            // corner — a thickness and a gap tighter than the outside.
+            lip = rectRing({ x0: 0, y0: 0, x1: lipW, y1: lipD }, Math.max(0, radius - t - play));
         aPart.push({
             label: "Lid",
             note: `${size(W, D)} — rests on the rim`
@@ -880,14 +1159,26 @@ export const buildBox = (opt: BoxOptions): BoxResult => {
     }
 
     if (opt.lid === "tray") {
-        aPart.push(...buildShell(c, {
+        const spec = {
             W: W + 2 * t + 2 * play,
             D: D + 2 * t + 2 * play,
             H: lidH,
             bottom: false,
             top: true,
             prefix: "Lid "
-        }));
+        };
+        aPart.push(...(bRound
+            ? buildBand(c, {
+                ...spec,
+                // The tray goes over the outside of the box, so its corners are
+                // a wall and a gap larger — which is what keeps the two
+                // curves parallel instead of one binding on the other.
+                radius: radius + t + play,
+                pattern: opt.cornerPattern,
+                pitch: opt.cornerPitch,
+                link: opt.cornerLink
+            })
+            : buildShell(c, spec)));
     }
 
     // ── dividers ────────────────────────────────────────────────────────
@@ -946,6 +1237,31 @@ export const buildBox = (opt: BoxOptions): BoxResult => {
     if (innerW <= 0 || innerD <= 0 || innerH <= 0) {
         warnings.push("The walls take up more room than the box has: there is no space left inside it.");
     }
+    if (bRound) {
+        const straightW = W - 2 * radius,
+            straightD = D - 2 * radius;
+        if (straightW < 4 * t || straightD < 4 * t) {
+            warnings.push(
+                `A ${mm(radius)} radius leaves almost no straight run between the corners — there is nowhere for the `
+                + "floor's tenons to go. Make the box bigger or the corners tighter."
+            );
+        }
+        if (radius < 4 * t) {
+            warnings.push(
+                `Bending ${mm(t)} sheet round a ${mm(radius)} corner is a lot to ask of the links. Cut one corner as a `
+                + "test strip in the living hinge tool first — the same pattern, the same numbers."
+            );
+        }
+        if (nW + nD > 0) {
+            warnings.push("The dividers are a square grid and the box is not: the outer compartments will not reach into the corners.");
+        }
+    }
+    if (opt.lid === "hinged" && opt.cornerRadius > 0) {
+        warnings.push(
+            "A clamshell cannot have rounded corners here: its hinge knuckle grows out of a side wall, and a box that "
+            + "wraps has no side walls. The corners have been left square."
+        );
+    }
     if (kerf === 0) {
         warnings.push(
             "Kerf is 0, so every joint is cut to nominal size and will come out about a beam's width loose. "
@@ -969,15 +1285,17 @@ export const buildBox = (opt: BoxOptions): BoxResult => {
     }
 
     const aCut = aPlaced.flatMap(p => p.cut),
+        aSlit = aPlaced.flatMap(p => p.slits ?? []),
         aMark = aPlaced.flatMap(p => p.engrave),
         aLayer: BoxLayer[] = [
             { operation: CUT, rings: aCut },
+            ...(aSlit.length ? [{ operation: CUT, rings: aSlit, open: true }] : []),
             ...(aMark.length ? [{ operation: MARK, rings: aMark }] : [])
         ];
 
     const body = aLayer.map(l =>
-        `<path d="${l.rings.map(a => pathData(a)).join(" ")}" fill="none" stroke="${l.operation.css}"`
-        + ` stroke-width="${EXPORT_STROKE}"/>`).join("");
+        `<path d="${l.rings.map(a => pathData(a, !l.open)).join(" ")}" fill="none" stroke="${l.operation.css}"`
+        + ` stroke-width="${EXPORT_STROKE}" stroke-linecap="round"/>`).join("");
 
     // Part names are a reading aid on the canvas and are deliberately not in
     // any exported file: nobody wants "Front" burnt into the front.
@@ -1001,8 +1319,9 @@ export const buildBox = (opt: BoxOptions): BoxResult => {
         inner: { w: innerW, d: innerD, h: Math.max(0, innerH) },
         wellDepth: Math.max(0, wellH),
         pieces: aCut.length,
-        points: aCut.reduce((n, a) => n + a.length, 0) + aMark.reduce((n, a) => n + a.length, 0),
-        cutLength: aCut.reduce((n, a) => n + ringLength(a), 0),
+        points: aLayer.reduce((n, l) => n + l.rings.reduce((m, a) => m + a.length, 0), 0),
+        cutLength: aCut.reduce((n, a) => n + ringLength(a), 0)
+            + aSlit.reduce((n, a) => n + openLength(a), 0),
         finger,
         warnings
     };
@@ -1016,7 +1335,7 @@ export const boxToSvg = (r: BoxResult): string =>
     `<svg xmlns="http://www.w3.org/2000/svg" width="${r3(r.width)}mm" height="${r3(r.height)}mm"`
     + ` viewBox="0 0 ${r3(r.width)} ${r3(r.height)}">`
     + r.aLayer.map(l =>
-        `<path d="${l.rings.map(a => pathData(a)).join(" ")}" fill="none" stroke="${l.operation.css}"`
+        `<path d="${l.rings.map(a => pathData(a, !l.open)).join(" ")}" fill="none" stroke="${l.operation.css}"`
         + ` stroke-width="${EXPORT_STROKE}"/>`).join("")
     + "</svg>";
 
@@ -1024,7 +1343,7 @@ export const boxToDxf = (r: BoxResult): string => {
     const aEntity: DxfEntity[] = r.aLayer.flatMap(l =>
         l.rings.map(a => ({
             color: l.operation.color,
-            closed: true,
+            closed: !l.open,
             // SVG y grows downward, DXF y grows upward.
             points: a.map(p => ({ x: p.x, y: r.height - p.y }))
         })));
@@ -1034,5 +1353,5 @@ export const boxToDxf = (r: BoxResult): string => {
 export const boxToFds = (r: BoxResult): Promise<Blob> =>
     buildFds(r.aLayer.map(l => ({
         mode: l.operation === CUT ? 2 : 1,
-        subpaths: l.rings.map(a => ({ points: a, closed: true }))
+        subpaths: l.rings.map(a => ({ points: a, closed: !l.open }))
     })));
