@@ -49,10 +49,10 @@ test.describe("stamp creator", () => {
 
     test("changes the plate shape", async ({ page }) => {
         await page.getByRole("radio", { name: "Circle" }).click();
-        // A circle round a 36 × 21 design reaches its far corner, so it is square.
-        const size = await stat(page, "Size").innerText();
-        const [w, h] = size.replace("Size", "").split("×").map(s => parseFloat(s));
-        expect(w).toBeCloseTo(h!, 1);
+        // A circle is as tall as it is wide. Asserted with a backreference so it
+        // retries: reading the text once races the debounced rebuild and catches
+        // the rectangle that was there a frame earlier.
+        await expect(stat(page, "Size")).toHaveText(/^Size(\d+(?:\.\d+)?) mm × \1 mm$/);
     });
 
     test("hides the corner radius for shapes that have no corners", async ({ page }) => {
@@ -303,7 +303,11 @@ test.describe("image tracer", () => {
     });
 
     test("moves the threshold and re-traces", async ({ page }) => {
+        // Captured after the first trace has settled, or "before" is whatever
+        // the status bar happened to hold mid-rebuild.
+        await expect(stat(page, "Nodes")).not.toHaveText("Nodes0");
         const before = await stat(page, "Nodes").innerText();
+
         const t = page.getByLabel("Brightness threshold, exact value");
         await t.fill("250");
         await t.blur();

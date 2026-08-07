@@ -1,4 +1,14 @@
-# Build the Astro site and deploy it to GitHub Pages
+# Test the site, then build it and deploy it to GitHub Pages.
+#
+# The gate is the point: the tests run *before* anything is published, and a
+# red one stops the deploy. Everything this site does happens in the visitor's
+# browser, so "it builds" says almost nothing about whether it works — the
+# end-to-end suite driving a real Chromium is the only thing that does.
+#
+# Two jobs rather than one, deliberately. A single-job workflow that is re-run
+# after a failure uploads a second `github-pages` artifact and dies with
+# "Multiple artifacts named github-pages were unexpectedly found"; split, a
+# re-run of the failed job does the right thing.
 name: Deploy static content to Pages
 
 on:
@@ -21,36 +31,69 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  test:
+    name: Test and build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 11
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run check
+      - name: Unit tests
+        run: pnpm run test
+
+      # Chromium only — the suite pins one browser in playwright.config.ts, and
+      # pulling the other two would triple the slowest step in the workflow.
+      - name: Install Chromium for Playwright
+        run: pnpm exec playwright install --with-deps chromium
+      - name: End-to-end tests
+        run: pnpm run test:e2e
+      - name: Keep the report when something failed
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+      # Built again rather than reusing the copy `test:e2e` left behind: what
+      # gets published should not depend on a side effect of a test step.
       - name: Build
         run: pnpm run build
       - name: Setup Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
         with:
           # Auto-enable GitHub Pages (source: GitHub Actions) on first run
           enablement: true
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: './dist'
+
+  deploy:
+    name: Deploy
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

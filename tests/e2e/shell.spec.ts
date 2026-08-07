@@ -269,10 +269,14 @@ test.describe("workspace shell", () => {
         expect(left!.h).toBeGreaterThan(stage.height - 40);
         // …and the numbers are actually inside the strip. The vertical ruler's
         // labels are rotated −90°, which put four fifths of every glyph off the
-        // left edge of a 20 px strip: that measured ~21 lit pixels against the
-        // ~50 a readable ruler has.
-        expect(top!.text).toBeGreaterThan(35);
-        expect(left!.text).toBeGreaterThan(35);
+        // left edge of a 20 px strip.
+        //
+        // Measured against the horizontal ruler rather than against a pixel
+        // count, because the two share a font: clipped, the left ruler drew
+        // 15 % of the top one's ink; whole, it draws about 35 %. Anything a
+        // different platform's font rendering does to one, it does to both.
+        expect(top!.text).toBeGreaterThan(20);
+        expect(left!.text).toBeGreaterThan(top!.text * 0.25);
     });
 
     test("shows a grid and a live zoom readout", async ({ page }) => {
