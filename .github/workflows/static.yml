@@ -5,11 +5,12 @@
 # browser, so "it builds" says almost nothing about whether it works — the
 # end-to-end suite driving a real Chromium is the only thing that does.
 #
-# Two jobs rather than one, deliberately. A single-job workflow that is re-run
+# Three jobs rather than one, deliberately. A single-job workflow that is re-run
 # after a failure uploads a second `github-pages` artifact and dies with
 # "Multiple artifacts named github-pages were unexpectedly found"; split, a
-# re-run of the failed job does the right thing.
-name: Deploy static content to Pages
+# re-run of the failed job does the right thing. And a release must only exist
+# for something that actually went live, which is what `needs: deploy` says.
+name: Test, deploy and release
 
 on:
   # Runs on pushes targeting the default branch
@@ -85,6 +86,14 @@ jobs:
         uses: actions/upload-pages-artifact@v5
         with:
           path: './dist'
+      # The same build again as a plain artifact, so the release job can attach
+      # it without installing and building the site a second time.
+      - name: Keep the build for the release
+        uses: actions/upload-artifact@v7
+        with:
+          name: site
+          path: dist/
+          retention-days: 1
 
   deploy:
     name: Deploy
@@ -97,3 +106,62 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+  release:
+    name: Release
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # Full history, because the version is worked out from the existing tags.
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # What went live gets a version, always — a deploy nobody can name is a
+      # deploy nobody can roll back to.
+      #
+      # package.json is the floor, not the answer: raise it there and that is
+      # the version (a deliberate major or minor), leave it alone and the patch
+      # ticks up from the newest tag. So a routine copy fix becomes 3.0.1
+      # without ceremony, and 3.1.0 still means someone decided it did.
+      - name: Work out the version
+        id: v
+        run: |
+          set -euo pipefail
+          PKG=$(node -p "require('./package.json').version")
+          LATEST=$(git tag --list 'v*' --sort=-v:refname | head -1 | sed 's/^v//')
+          if [ -z "$LATEST" ]; then
+            NEXT="$PKG"
+          elif [ "$PKG" != "$LATEST" ] && [ "$(printf '%s\n%s\n' "$PKG" "$LATEST" | sort -V | tail -1)" = "$PKG" ]; then
+            NEXT="$PKG"
+          else
+            NEXT=$(echo "$LATEST" | awk -F. '{ printf "%d.%d.%d", $1, $2, $3 + 1 }')
+          fi
+          echo "tag=v$NEXT" >> "$GITHUB_OUTPUT"
+          echo "subject=$(git log -1 --pretty=%s)" >> "$GITHUB_OUTPUT"
+          echo "package.json $PKG, newest tag ${LATEST:-none} -> v$NEXT"
+
+      - name: Download the build
+        uses: actions/download-artifact@v7
+        with:
+          name: site
+          path: site
+      - name: Zip it
+        run: cd site && zip -qr "../laserkit-${{ steps.v.outputs.tag }}.zip" .
+
+      # `gh release create` tags the commit itself, so there is no tag push to
+      # race the workflow with. Tag pushes do not re-trigger this workflow
+      # anyway — it only listens to `main` — but one moving part fewer.
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.v.outputs.tag }}" \
+            --target "${{ github.sha }}" \
+            --title "${{ steps.v.outputs.tag }} — ${{ steps.v.outputs.subject }}" \
+            --generate-notes \
+            --latest \
+            "laserkit-${{ steps.v.outputs.tag }}.zip#The built site, for running it offline"

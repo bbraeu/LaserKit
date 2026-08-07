@@ -324,6 +324,28 @@ Runtime dependencies: `fflate` and `client-zip` for the ZIP formats,
 the shadcn/ui components. Everything else — DXF, FDS, contour offsetting,
 inversion, outline tracing — is in `src/lib`.
 
+## Releases
+
+Every push to `main` runs `.github/workflows/static.yml`: typecheck, unit tests
+and the end-to-end suite, then the build, then the deploy, then a GitHub
+release. A red test stops the deploy, and a failed deploy stops the release —
+so a release only ever exists for something that actually went live.
+
+The version comes from `package.json` as a *floor*: raise it there and that is
+the release (a deliberate major or minor), leave it alone and the patch ticks up
+from the newest tag. So a routine copy fix becomes `3.0.1` without ceremony, and
+`3.1.0` still means somebody decided it did. Each release carries auto-generated
+notes and a zip of the built site, for running the tools offline.
+
+Worth knowing before debugging a failure:
+
+- Run the suite as CI does before pushing — `CI=1 pnpm test:e2e` drops to two
+  workers, which is how a race that eight workers hide shows itself.
+- A red *Pages* step does not always mean the site is stale; the deploy action
+  has timed out on a deployment that had already been applied. Check the live
+  URL first, and never re-run the same sha — an empty commit is what gets a
+  fresh deployment id.
+
 ## Development
 
 ```sh
