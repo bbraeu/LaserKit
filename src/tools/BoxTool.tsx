@@ -187,6 +187,12 @@ export default function BoxTool() {
             : [])
     ];
 
+    // A clamshell cannot be wrapped — its hinge knuckle grows out of a side
+    // wall, and a box that wraps has none. So the corner controls are not shown
+    // at all there rather than shown and ignored, and everything downstream
+    // asks this rather than the raw radius.
+    const bRound = p.cornerRadius > 0 && p.lid !== "hinged";
+
     const bTallLid = p.lid === "tray" || p.lid === "hinged",
         bPlay = p.lid === "layon" || p.lid === "tray" || p.dividersW + p.dividersD > 0,
         innerH = result?.inner.h ?? 0,
@@ -357,7 +363,7 @@ export default function BoxTool() {
                 {/* A wrapped wall has no edge for a plate to notch into, so a
                     rounded box has only one answer here. Offering the other
                     would be offering something that cannot be built. */}
-                {p.cornerRadius === 0 ? (
+                {!bRound ? (
                     <SegmentedField
                         label="Floor & lid"
                         hint={JOINTS.find(o => o.id === p.panelJoint)!.hint}
@@ -372,7 +378,7 @@ export default function BoxTool() {
                         material that has been cut into strips.
                     </p>
                 )}
-                {(p.panelJoint === "offset" || p.cornerRadius > 0) && (
+                {(p.panelJoint === "offset" || bRound) && (
                     <>
                         <SliderField
                             label="Inset by"
@@ -392,6 +398,7 @@ export default function BoxTool() {
             </PanelSection>
 
             {/* ── Square, or wrapped ─────────────────────────────────────── */}
+            {p.lid !== "hinged" && (
             <PanelSection id="box-corners" title="Corners" icon={<Spline className="size-3" />} defaultOpen={false}>
                 <SliderField
                     label="Radius"
@@ -439,6 +446,7 @@ export default function BoxTool() {
                     </>
                 )}
             </PanelSection>
+            )}
 
             {/* ── What closes it ─────────────────────────────────────────── */}
             <PanelSection id="box-lid" title="Lid">
@@ -507,6 +515,7 @@ export default function BoxTool() {
                         <p className="text-[11px] leading-relaxed text-subtle-foreground">
                             Two ears are cut with it. They screw to the <em>outside</em> of the box's side walls —
                             the holes are already there — and the lid's knuckles turn on a pin through them.
+                            {p.cornerRadius > 0 && " Which is also why this lid has no corner radius: a box that wraps has no side walls for them to screw to."}
                         </p>
                     </>
                 )}

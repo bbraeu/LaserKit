@@ -73,13 +73,30 @@ test.describe("rounded corners", () => {
         await expect(panel(page)).toContainText("no edge for the floor to notch into");
     });
 
-    test("says a clamshell cannot be wrapped, rather than drawing a lie", async ({ page }) => {
+    test("takes the corner controls away for a clamshell rather than ignoring them", async ({ page }) => {
         await round(page, 25);
+        await expect(panel(page).getByRole("slider", { name: "Radius" })).toBeVisible();
+
         await panel(page).getByRole("combobox", { name: "Type" }).click();
         await page.getByRole("option", { name: /Hinged lid/ }).click();
+
+        // The whole section goes: a clamshell's knuckle grows out of a side
+        // wall, and a box that wraps has none. A control that cannot work is
+        // left out here rather than disabled.
+        await expect(panel(page).getByRole("button", { name: "Corners", exact: true })).toHaveCount(0);
+        await expect(panel(page).getByRole("slider", { name: "Radius" })).toHaveCount(0);
+        // …and because a radius *was* set, the status bar says it is being ignored.
         await expect(page.getByTestId("statusbar")).toContainText(/\d note/);
         await page.getByTestId("statusbar").getByRole("button", { name: /notes?$/ }).hover();
         await expect(page.getByRole("tooltip")).toContainText("no side walls");
+    });
+
+    test("never offers the corner section on a clamshell in the first place", async ({ page }) => {
+        await panel(page).getByRole("combobox", { name: "Type" }).click();
+        await page.getByRole("option", { name: /Hinged lid/ }).click();
+        await expect(panel(page).getByRole("button", { name: "Corners", exact: true })).toHaveCount(0);
+        // No radius was ever set, so there is nothing to be told about either.
+        await expect(page.getByTestId("statusbar")).not.toContainText("no side walls");
     });
 
     test("goes back to a square box when the radius goes back to 0", async ({ page }) => {
