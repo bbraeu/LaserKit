@@ -94,6 +94,19 @@ export const TOOLS: ToolDef[] = [
         description: "Free in-browser box generator for laser cutting: finger-jointed boxes at any size, measured inside or outside, with a lay-on, tray, hinged or closed lid, an inset floor, cross-lapped dividers and kerf compensation on every joint. Exports SVG, DXF and Falcon Design Space (.fds)."
     },
     {
+        id: "hinge",
+        slug: "hinge/",
+        label: "Living hinge",
+        short: "Hinge",
+        hint: "a panel → one that bends",
+        blurb: "Cut a field of slits into a flat panel so it rolls up — straight, wave or stress-relieved — with the twist every row has to take worked out for the radius you want.",
+        // A sheet bending: a curve with the flat it came from behind it.
+        icon: "M3 7.5h18M3 7.5c0 6 3.75 9.75 9 9.75s9-3.75 9-9.75M7.5 7.5v9.75M12 7.5v9.75M16.5 7.5v9.75",
+        accepts: "nothing — it starts from a panel size",
+        title: "Living hinge generator — kerf bending patterns for laser cutting | LaserKit",
+        description: "Free in-browser living hinge generator: fill a panel with a brick-offset lattice, wave or T-ended slits so plywood or acrylic bends, with the row spacing, link length and kerf worked out for the radius you need. Exports SVG, DXF and Falcon Design Space (.fds)."
+    },
+    {
         // Renamed to the job it does. /invert/ is still a page — a redirect to
         // here — so links from before the rename keep working.
         id: "stamp",

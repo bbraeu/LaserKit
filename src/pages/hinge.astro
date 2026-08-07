@@ -1,0 +1,138 @@
+---
+import ToolPage from "../components/ToolPage.astro";
+import HingeTool from "../tools/HingeTool";
+---
+
+<ToolPage tool="hinge">
+    <Fragment slot="lead">
+        A field of slits cut into a flat panel so that it rolls up. Set the panel, pick a pattern, and the tool works
+        out how far <strong class="text-slate-300">every row has to twist</strong> to reach the radius you want — and
+        whether the material between the slits will survive it.
+    </Fragment>
+
+    <HingeTool client:only="react">
+        <div slot="fallback" class="flex h-[100dvh] flex-col bg-[#08090d]">
+            <div class="h-12 shrink-0 border-b border-white/7"></div>
+            <div class="flex min-h-0 flex-1">
+                <div class="hidden w-60 shrink-0 border-r border-white/7 xl:block"></div>
+                <div class="flex-1"></div>
+                <div class="hidden w-76 shrink-0 border-l border-white/7 xl:block"></div>
+            </div>
+            <div class="h-7 shrink-0 border-t border-white/7"></div>
+        </div>
+    </HingeTool>
+
+    <section slot="notes" class="relative px-4 pb-24">
+        <div class="mx-auto w-[min(72rem,100%)]">
+            <div class="glass reveal rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">It twists, it does not stretch</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    Bend a solid panel and its outer face has to get longer. Plywood tears at something under two per
+                    cent, so 3 mm ply can be persuaded around about a 100 mm radius and no tighter — which is not a
+                    hinge, it is a gentle curve.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    A lattice hinge does not stretch at all. The strips between the slits <strong class="text-slate-300">twist about their own long axis</strong>, and the bend is the sum of all those little twists.
+                    Three things follow, and they are the whole tool: the slits have to run
+                    <em>parallel to the axis you are bending around</em> or nothing happens; the
+                    <strong class="text-slate-300">link</strong> — the uncut material between two slits end to end — is
+                    the part that actually breaks; and a hinge with twice as many rows is twice as bendy rather than
+                    twice as strong.
+                </p>
+            </div>
+
+            <div class="mt-5 grid gap-5 lg:grid-cols-3">
+                <article class="glass reveal rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">One exact number</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Most of what you read about living hinges is a rule of thumb. This part is not:
+                        <strong class="text-slate-300">twist per row = row spacing ÷ radius</strong>. No material
+                        constant, no fudge. Rows 5 mm apart bent to a 40 mm radius turn 5/40 of a radian each — 7.2° —
+                        relative to their neighbour. Halve the spacing and you halve what every row is asked for. That
+                        is why row spacing, not slit length, is the control that decides how tightly a panel rolls.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 110ms">
+                    <h2 class="text-lg font-semibold text-white">And one that is a guess</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        The strain figure turns that twist into a prediction: a link of a given length, twisted through
+                        a given angle in a sheet of a given thickness, shears by about so much. Where the warning
+                        starts — 3.5 % — is a rule of thumb and nothing more. Plywood in rolling shear across the
+                        plies, acrylic, MDF and a hardwood veneer all give up at different points, and the same board
+                        behaves differently damp. Treat it as a place to start arguing, not an answer.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 220ms">
+                    <h2 class="text-lg font-semibold text-white">The kerf eats the link</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Both ends of a link are slit ends, so the beam takes a full kerf out of it. A 5 mm link in a
+                        0.15 mm kerf is really 4.85 mm of material — barely worth mentioning. A 1 mm link is 0.85 mm,
+                        which is a fifth of the part that has to hold. The status bar shows what is left after the
+                        beam, not what you typed.
+                    </p>
+                </article>
+            </div>
+
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">Three patterns, and why you would pick each</h2>
+                <dl class="mt-4 grid gap-4 text-sm leading-relaxed sm:grid-cols-3">
+                    <div>
+                        <dt class="font-semibold text-slate-200">Straight</dt>
+                        <dd class="mt-1 text-slate-400">
+                            Plain slits in a brick bond. Quickest to cut, stiffest of the three, and the one that
+                            cracks first — a slit ends in a point, and a point is where all the stress in the link
+                            goes.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Wave</dt>
+                        <dd class="mt-1 text-slate-400">
+                            The same field with each slit running as one S. A longer cut takes the same bend more
+                            gently, and the material at the end of a slit is never asked to turn a corner. It is also
+                            the one that looks deliberate rather than perforated.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">T-ends</dt>
+                        <dd class="mt-1 text-slate-400">
+                            Straight slits with a short bar across each end, spreading the stress along a line instead
+                            of piling it on a point. Costs a little stiffness and buys a hinge that survives being
+                            opened twice. The bar is left off any end that runs off the edge, which would cut the
+                            corner of the panel clean off.
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+
+            <div class="grid gap-5 lg:grid-cols-2">
+                <div class="glass reveal mt-5 rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">Flat ends, no border</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        <strong class="text-slate-300">Flat ends</strong> keep the two ends of the bend uncut, so the
+                        hinge is a band across the middle — which is what a curved box lid is: two flat ends to glue
+                        into the sides, and the curve between them. A <strong class="text-slate-300">border</strong>
+                        along the other two edges is almost always a mistake: it is stiffer than everything inside it,
+                        so the panel bends around the border rather than with it. Leave it at 0 unless something has to
+                        be screwed to that edge.
+                    </p>
+                </div>
+                <div class="glass reveal mt-5 rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">Cut the strip first</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        There is a <em>test strip</em> preset for a reason. Forty by sixty millimetres costs a minute
+                        and a scrap, and it answers the only question that matters — whether <em>this</em> sheet, at
+                        <em>this</em> pattern, reaches the radius you need without a link letting go. A hinge that
+                        fails does not fail gracefully: it fails at one link, and then at the next.
+                    </p>
+                </div>
+            </div>
+
+            <p class="reveal mt-5 text-xs leading-relaxed text-slate-500">
+                The rows are rounded to fit the panel exactly rather than leaving a stub at one edge, and so are the
+                slits along each row — the link is held at what you set, because it is the part carrying the load, and
+                the slit length gives way to make the arithmetic come out. Everything is a cut, in red; there is
+                nothing to engrave on a hinge.
+            </p>
+        </div>
+    </section>
+</ToolPage>
