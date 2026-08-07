@@ -40,17 +40,26 @@ const DEFAULTS: MandalaParams = {
     hub: 0.14,
     hole: 0,
     ringLines: true,
+    // Outlined, because that is what a mandala is: line work that is only
+    // sometimes filled in afterwards. Solid blobs are the one thing that makes
+    // a generated one look generated.
+    outlined: true,
+    nested: true,
     mode: "engrave",
     outline: true,
     seed: 1
 };
 
 const STYLES = [
-    { id: "mixed" as const, label: "Mixed", hint: "A different motif per ring, picked from the seed. The one that most looks like somebody designed it." },
+    { id: "mixed" as const, label: "Mixed", hint: "A different motif per ring, picked from the seed, with a ring of dots dropped in now and then. The one that most looks like somebody designed it." },
+    { id: "lotus" as const, label: "Lotus petals", hint: "Drawn out to a sharp point at each end. The shape most people picture when they hear “mandala”." },
     { id: "petal" as const, label: "Petals", hint: "A lens: widest in the middle, pointed at both ends." },
     { id: "drop" as const, label: "Drops", hint: "Narrow at the hub and round at the rim, like a flame." },
-    { id: "spoke" as const, label: "Spokes", hint: "Nearly parallel sides with rounded ends. The most open of the four, and the strongest when cut." },
-    { id: "scallop" as const, label: "Scallops", hint: "Fat almost all the way out, so what is left between them is a thin rib. Handsome engraved, fragile cut." }
+    { id: "diamond" as const, label: "Diamonds", hint: "Straight sides to a point either side. The one angular motif, and what makes a ring read as geometry rather than flowers." },
+    { id: "dart" as const, label: "Darts", hint: "Triangles standing on the hub and widening to the rim — a sunburst when there is only one ring of them." },
+    { id: "spoke" as const, label: "Spokes", hint: "Nearly parallel sides with rounded ends. The most open of the set, and the strongest when cut." },
+    { id: "scallop" as const, label: "Scallops", hint: "Fat almost all the way out, so what is left between them is a thin rib. Handsome engraved, fragile cut." },
+    { id: "dots" as const, label: "Dots", hint: "A ring of small circles instead of a band of shapes. On its own it is a bead ring; between two bands it is the punctuation that stops a mandala reading as concentric fences." }
 ];
 
 const MODES = [
@@ -63,7 +72,7 @@ const PRESETS: Preset<MandalaParams>[] = [
         id: "coaster",
         label: "Engraved coaster",
         hint: "A 100 mm disc, twelve-fold, three rings",
-        patch: { size: 100, symmetry: 16, rings: 4, style: "mixed", mode: "engrave", gap: 0.3, hole: 0, ringLines: true }
+        patch: { size: 100, symmetry: 16, rings: 4, style: "mixed", mode: "engrave", gap: 0.3, hole: 0, ringLines: true, outlined: true, nested: true }
     },
     {
         id: "suncatcher",
@@ -75,13 +84,13 @@ const PRESETS: Preset<MandalaParams>[] = [
         id: "rosette",
         label: "Dense rosette",
         hint: "Twenty-four-fold, five rings — engraved only",
-        patch: { size: 150, symmetry: 24, rings: 5, style: "petal", mode: "engrave", gap: 0.25, ringGap: 2, ringLines: true }
+        patch: { size: 150, symmetry: 24, rings: 5, style: "lotus", mode: "engrave", gap: 0.25, ringGap: 2, ringLines: true, outlined: true, nested: true }
     },
     {
         id: "sunburst",
         label: "Sunburst",
         hint: "One ring of long spokes off a big hub",
-        patch: { symmetry: 32, rings: 1, style: "spoke", hub: 0.45, gap: 0.5, mode: "engrave", ringLines: false }
+        patch: { symmetry: 32, rings: 1, style: "dart", hub: 0.45, gap: 0.5, mode: "engrave", ringLines: false, outlined: true, nested: false }
     }
 ];
 
@@ -269,6 +278,19 @@ export default function MandalaTool() {
                     value={p.mode}
                     choices={MODES}
                     onChange={(v: MandalaMode) => params.set({ mode: v }, { label: "The motifs" })}
+                />
+                <ToggleField
+                    label="Outlines"
+                    hint="Draw the motifs as lines rather than solid areas. This is what a mandala actually is — every one ever drawn is line work, outlined first and only sometimes filled in — and it is a fraction of the burn."
+                    checked={p.outlined}
+                    onChange={b => params.set({ outlined: b }, { label: "Outlines" })}
+                />
+                <ToggleField
+                    label="Nested echo"
+                    hint="A smaller copy of each motif inside itself. The other hallmark of a hand-drawn mandala — one echo turns a shape into a motif. Engraved only: a smaller hole inside a hole is a ring of material that falls out on its own."
+                    checked={p.nested}
+                    disabled={p.mode === "cut"}
+                    onChange={b => params.set({ nested: b }, { label: "Nested echo" })}
                 />
                 <ToggleField
                     label="Ring lines"

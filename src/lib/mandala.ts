@@ -43,8 +43,16 @@ export const MANDALA_LIMITS = {
     maxRings: 10
 } as const;
 
-/** What one repeat of a ring looks like. */
-export type Motif = "petal" | "drop" | "spoke" | "scallop";
+/**
+ * What one repeat of a ring looks like.
+ *
+ * The set is not arbitrary. Every tutorial on drawing a mandala reaches for the
+ * same handful — teardrops, pointed petals, dots, triangles, arcs, diamonds —
+ * because they are the shapes that survive being repeated thirty times without
+ * turning to mush, and `dots` is in there because a ring that is *not* a band
+ * of motifs is what stops a mandala reading as a set of concentric fences.
+ */
+export type Motif = "petal" | "lotus" | "drop" | "spoke" | "scallop" | "diamond" | "dart" | "dots";
 
 export type MandalaStyle = Motif | "mixed";
 
@@ -73,6 +81,22 @@ export interface MandalaOptions {
     hole: number;
     /** a thin circle between one ring and the next */
     ringLines: boolean;
+    /**
+     * Draw the motifs as outlines rather than solid areas.
+     *
+     * This is what a mandala actually *is*. Every one ever drawn is line work —
+     * the shapes are outlined and only then, sometimes, filled in — and solid
+     * blobs are the single thing that makes a generated one look generated.
+     * Engraved as lines it is also a fraction of the burn.
+     */
+    outlined: boolean;
+    /**
+     * A smaller copy of each motif inside itself.
+     *
+     * The other hallmark: "layered smaller petals, offset". One echo turns a
+     * shape into a motif, and it costs nothing but a second ring.
+     */
+    nested: boolean;
     mode: MandalaMode;
     /** cut the outer circle */
     outline: boolean;
@@ -91,7 +115,14 @@ export interface MandalaResult {
     aLayer: MandalaLayer[];
     width: number;
     height: number;
-    /** motifs drawn, all rings together */
+    /**
+     * Motifs, all rings together — shapes, not rings of geometry.
+     *
+     * A nested echo is part of its motif rather than another one, and a dot is
+     * one motif. Counting rings instead would say a mandala had twice as many
+     * motifs the moment the echo was switched on, which is not a thing anybody
+     * means by the word.
+     */
     motifs: number;
     /** the narrowest material left between two motifs, mm */
     web: number;
@@ -124,12 +155,45 @@ const rng = (seed: number): (() => number) => {
 const PROFILE: Record<Motif, (t: number) => number> = {
     // A lens: widest in the middle, pointed at both ends.
     petal: t => Math.sin(Math.PI * t),
+    // The same, drawn out to a sharp point at each end. The classic lotus
+    // petal, and the shape most people picture when they hear "mandala".
+    lotus: t => Math.sin(Math.PI * t) ** 1.7,
     // Narrow at the hub and round at the rim, like a flame.
     drop: t => Math.sin(Math.PI * t) ** 0.6 * (0.35 + 0.65 * t),
     // Nearly parallel sides with rounded ends: a slot.
     spoke: t => Math.min(1, Math.sin(Math.PI * t) * 2.6),
     // Fat almost all the way, so the material between them is a thin rib.
-    scallop: t => Math.sin(Math.PI * t) ** 0.4
+    scallop: t => Math.sin(Math.PI * t) ** 0.4,
+    // Straight sides to a point either side: a rhombus. The one angular shape
+    // in the set, and the one that makes a ring read as geometry rather than
+    // as flowers.
+    diamond: t => 1 - Math.abs(2 * t - 1),
+    // A triangle standing on the hub and widening to the rim.
+    dart: t => t,
+    // Not a band shape at all — see `dotRing`.
+    dots: () => 0
+};
+
+/** The motifs that are a shape in a band, as against a ring of circles. */
+const BANDS = (Object.keys(PROFILE) as Motif[]).filter(m => m !== "dots");
+
+/**
+ * A ring of small circles.
+ *
+ * Every mandala tutorial has one, and the reason is structural rather than
+ * decorative: a run of bands all made of the same kind of shape reads as a set
+ * of concentric fences. One ring of dots between them breaks the rhythm, and
+ * suddenly the whole thing looks composed.
+ */
+const dotRing = (centre: Point, r0: number, r1: number, n: number, phase: number): Point[][] => {
+    const rMid = (r0 + r1) / 2,
+        // Big enough to read, small enough that they never touch: half the band
+        // or half the gap between two of them, whichever is less.
+        rDot = Math.min((r1 - r0) / 2, (Math.PI * rMid) / n * 0.62);
+    return Array.from({ length: n }, (_, k) => {
+        const a = phase + (2 * Math.PI * k) / n;
+        return circleRing(centre.x + rMid * Math.cos(a), centre.y + rMid * Math.sin(a), Math.max(0.2, rDot));
+    });
 };
 
 /** Points per motif along each of its two edges. */
@@ -189,14 +253,36 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
     const slotHalf = (Math.PI / n) * (1 - gap),
         aspect = 0.42;
 
-    const aMotif: Point[][] = [];
-    let web = Infinity;
+    // Nesting is an engraved idea: a smaller hole inside a hole is a ring of
+    // material that falls out on its own.
+    const bNested = opt.nested && opt.mode !== "cut",
+        aMotif: Point[][] = [],
+        aMotifKind: Motif[] = [];
+    let web = Infinity,
+        nMotif = 0;
 
     for (const [i, r] of aRing.entries()) {
+        // Mixed never puts two dot rings together and never opens on one: a
+        // ring of dots is punctuation, and punctuation on its own is not a
+        // sentence.
         const motif: Motif = opt.style === "mixed"
-            ? (["petal", "drop", "spoke", "scallop"] as Motif[])[Math.floor(next() * 4)]!
+            ? (i > 0 && next() < 0.28 && aMotifKind[i - 1] !== "dots"
+                ? "dots"
+                : BANDS[Math.floor(next() * BANDS.length)]!)
             : opt.style;
+        aMotifKind.push(motif);
         const profile = PROFILE[motif];
+
+        // Every other ring is turned half a slot, so the pattern reads as a
+        // weave rather than as spokes lining up all the way out.
+        const phase = (i % 2) * (Math.PI / n);
+
+        if (motif === "dots") {
+            aMotif.push(...dotRing(centre, r.r0, r.r1, n, phase));
+            nMotif += n;
+            web = Math.min(web, ((2 * Math.PI * ((r.r0 + r.r1) / 2)) / n) * 0.24);
+            continue;
+        }
 
         // Where the motif is at its widest, and therefore where the material
         // between two of them is at its narrowest.
@@ -211,12 +297,17 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
             here = 2 * ((Math.PI / n) - halfMax * profile(tFat)) * rFat;
         web = Math.min(web, here);
 
-        // Every other ring is turned half a slot, so the pattern reads as a
-        // weave rather than as spokes lining up all the way out.
-        const phase = (i % 2) * (Math.PI / n);
         for (let k = 0; k < n; k++) {
-            aMotif.push(motifRing(centre, r.r0, r.r1, phase + (2 * Math.PI * k) / n, halfMax, profile));
+            const a = phase + (2 * Math.PI * k) / n;
+            aMotif.push(motifRing(centre, r.r0, r.r1, a, halfMax, profile));
+            // The echo. Inset radially as well as narrowed, or it would touch
+            // its parent at both ends.
+            if (bNested) {
+                const inset = (r.r1 - r.r0) * 0.22;
+                aMotif.push(motifRing(centre, r.r0 + inset, r.r1 - inset, a, halfMax * 0.52, profile));
+            }
         }
+        nMotif += n;
     }
 
     if (!isFinite(web)) web = 0;
@@ -279,8 +370,10 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
             ...(outline.length || aHole.length
                 ? [{ operation: CUT, rings: [...outline, ...aHole], filled: false }]
                 : []),
-            { operation: FILL, rings: aMotif, filled: true },
-            ...(aRule.length ? [{ operation: MARK, rings: aRule, filled: false }] : [])
+            opt.outlined
+                ? { operation: MARK, rings: [...aMotif, ...aRule], filled: false }
+                : { operation: FILL, rings: aMotif, filled: true },
+            ...(!opt.outlined && aRule.length ? [{ operation: MARK, rings: aRule, filled: false }] : [])
         ];
 
     return {
@@ -288,7 +381,7 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
         aLayer,
         width: size,
         height: size,
-        motifs: aMotif.length,
+        motifs: nMotif,
         web,
         ringWeb: ringGap,
         points: aLayer.reduce((a, l) => a + l.rings.reduce((m, r) => m + r.length, 0), 0),

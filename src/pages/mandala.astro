@@ -5,10 +5,10 @@ import MandalaTool from "../tools/MandalaTool";
 
 <ToolPage tool="mandala">
     <Fragment slot="lead">
-        Radial patterns at any size and any symmetry, in four motifs. Engrave them into a disc, or cut them clean
-        through for a suncatcher — in which case the number that matters is not how it looks but
-        <strong class="text-slate-300">how much material is left between the motifs</strong>, and that is measured for
-        you in millimetres.
+        Radial patterns at any size and any symmetry, drawn the way a mandala actually is:
+        <strong class="text-slate-300">line work</strong>, with a smaller echo of every motif inside itself. Engrave
+        them into a disc, or cut them clean through for a suncatcher — in which case the number that matters is not
+        how it looks but how much material is left between the motifs, and that is measured for you in millimetres.
     </Fragment>
 
     <MandalaTool client:only="react">
@@ -42,33 +42,63 @@ import MandalaTool from "../tools/MandalaTool";
                 </p>
             </div>
 
-            <div class="mt-5 grid gap-5 lg:grid-cols-4">
-                <article class="glass reveal rounded-2xl p-6">
-                    <h2 class="text-base font-semibold text-white">Petals</h2>
-                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
-                        A lens: widest in the middle, pointed at both ends. The most flower-like of the four.
-                    </p>
-                </article>
-                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 80ms">
-                    <h2 class="text-base font-semibold text-white">Drops</h2>
-                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
-                        Narrow at the hub and round at the rim, like a flame. Reads as motion round the circle.
-                    </p>
-                </article>
-                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 160ms">
-                    <h2 class="text-base font-semibold text-white">Spokes</h2>
-                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
-                        Nearly parallel sides with rounded ends. The most open of the four, and the strongest when
-                        cut — this is the one for a suncatcher.
-                    </p>
-                </article>
-                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 240ms">
-                    <h2 class="text-base font-semibold text-white">Scallops</h2>
-                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
-                        Fat almost all the way out, so what is left between them is a thin rib. Handsome engraved and
-                        the first to break cut.
-                    </p>
-                </article>
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">Line work, and an echo</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    Two things separate a mandala from a pattern of blobs, and neither is the shape of the motif.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    The first is that a mandala is <strong class="text-slate-300">outlined</strong>. Every one ever
+                    drawn is line work — the shapes are drawn as outlines and only sometimes filled in afterwards — and
+                    solid areas are the single thing that makes a generated one look generated. It is also a fraction
+                    of the burn. The second is the <strong class="text-slate-300">nested echo</strong>: a smaller copy
+                    of each motif inside itself, which is what turns a shape into a motif. Both are on by default and
+                    both can be turned off; the echo is engraved only, because a smaller hole inside a hole is a ring
+                    of material that falls out on its own.
+                </p>
+            </div>
+
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">Eight motifs, and why these eight</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    They are not arbitrary. Every guide to drawing a mandala reaches for the same handful — teardrops,
+                    pointed petals, dots, triangles, arcs, diamonds — because those are the shapes that survive being
+                    repeated thirty times without turning to mush.
+                </p>
+                <dl class="mt-4 grid gap-4 text-sm leading-relaxed sm:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                        <dt class="font-semibold text-slate-200">Lotus petals</dt>
+                        <dd class="mt-1 text-slate-400">Drawn out to a sharp point at each end — the shape most people picture when they hear the word.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Petals</dt>
+                        <dd class="mt-1 text-slate-400">A lens: widest in the middle, pointed at both ends.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Drops</dt>
+                        <dd class="mt-1 text-slate-400">Narrow at the hub and round at the rim, like a flame. Reads as motion round the circle.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Diamonds</dt>
+                        <dd class="mt-1 text-slate-400">Straight sides to a point either side — the one angular motif, and what makes a ring read as geometry rather than flowers.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Darts</dt>
+                        <dd class="mt-1 text-slate-400">Triangles standing on the hub and widening to the rim. One ring of them on a big hub is a sunburst.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Spokes</dt>
+                        <dd class="mt-1 text-slate-400">Nearly parallel sides with rounded ends. The most open of the set and the strongest when cut — this is the one for a suncatcher.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Scallops</dt>
+                        <dd class="mt-1 text-slate-400">Fat almost all the way out, so what is left between them is a thin rib. Handsome engraved and the first to break cut.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Dots</dt>
+                        <dd class="mt-1 text-slate-400">A ring of small circles instead of a band of shapes. Structural rather than decorative: without one, a run of bands reads as concentric fences.</dd>
+                    </div>
+                </dl>
             </div>
 
             <div class="grid gap-5 lg:grid-cols-2">

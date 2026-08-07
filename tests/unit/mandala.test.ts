@@ -19,6 +19,8 @@ const BASE: MandalaOptions = {
     hub: 0.18,
     hole: 0,
     ringLines: false,
+    outlined: false,
+    nested: false,
     mode: "engrave",
     outline: true,
     seed: 1
@@ -106,8 +108,9 @@ describe("the web, which is what holds a cut one together", () => {
 
 describe("styles", () => {
     it("draws all four, and each differently", () => {
-        const svgs = (["petal", "drop", "spoke", "scallop"] as const).map(style => mandalaToSvg(mandala({ style })));
-        expect(new Set(svgs).size).toBe(4);
+        const aStyle = ["petal", "lotus", "drop", "spoke", "scallop", "diamond", "dart", "dots"] as const,
+            svgs = aStyle.map(style => mandalaToSvg(mandala({ style })));
+        expect(new Set(svgs).size).toBe(aStyle.length);
     });
 
     it("mixes them from the seed, repeatably", () => {
@@ -120,7 +123,7 @@ describe("styles", () => {
     it("closes every motif at both ends", () => {
         // The profile is 0 at t=0 and t=1 for every style, which is what makes
         // the two edges meet without a special case.
-        for (const style of ["petal", "drop", "spoke", "scallop"] as const) {
+        for (const style of ["petal", "lotus", "drop", "spoke", "scallop", "diamond", "dart"] as const) {
             const r = mandala({ style, mode: "engrave", outline: false }),
                 a = r.aLayer.find(l => l.filled)!.rings[0]!;
             expect(Math.hypot(a[0]!.x - a[a.length - 1]!.x, a[0]!.y - a[a.length - 1]!.y)).toBeLessThan(0.01);

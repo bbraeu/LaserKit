@@ -59,7 +59,7 @@ test("says nothing about the web while it is only being engraved", async ({ page
 test("hides the seed unless the motifs are mixed", async ({ page }) => {
     await expect(page.getByLabel("Seed, exact value")).toBeVisible();
     await panel(page).getByRole("combobox", { name: "Motif" }).click();
-    await page.getByRole("option", { name: "Petals" }).click();
+    await page.getByRole("option", { name: "Petals", exact: true }).click();
     await expect(page.getByLabel("Seed, exact value")).toHaveCount(0);
 });
 

@@ -30,6 +30,18 @@ export const REPO = "https://github.com/bbraeu/LaserKit";
 
 export const RELEASES: Release[] = [
     {
+        version: "3.10.1",
+        date: "2026-08-08",
+        title: "Mandalas that look like mandalas",
+        tools: ["mandala"],
+        notes: [
+            "The first version drew solid blobs, and it showed. A mandala is line work — every one ever drawn is outlined, and only sometimes filled in afterwards — so the motifs are now outlines by default, which is also a fraction of the burn.",
+            "Each motif carries a smaller echo of itself inside. That is the other hallmark of a hand-drawn one, and it is what turns a shape into a motif.",
+            "Four more motifs: lotus petals drawn out to a sharp point, diamonds, darts, and rings of plain dots. Dots are structural rather than decorative — without one, a run of bands reads as concentric fences.",
+            "Mixed now drops a dot ring in between bands rather than only shuffling shapes, and never opens on one."
+        ]
+    },
+    {
         version: "3.10.0",
         date: "2026-08-07",
         title: "Mandalas and sunbursts",
