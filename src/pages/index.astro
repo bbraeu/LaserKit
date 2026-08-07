@@ -14,34 +14,6 @@ const operations = [
     OPERATION_COLORS.VECTOR_CUTTING!
 ];
 
-const features = [
-    {
-        icon: "M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z",
-        title: "100% private",
-        text: "Your designs never leave your computer. Parsing, conversion and file generation all run locally in your browser — no upload, no server, no account."
-    },
-    {
-        icon: "M6.429 9.75 2.25 12l4.179 2.25m0-4.5 5.571 3 5.571-3m-11.142 0L2.25 7.5 12 2.25l9.75 5.25-4.179 2.25m0 0L21.75 12l-4.179 2.25m0 0 4.179 2.25L12 21.75 2.25 16.5l4.179-2.25m11.142 0-5.571 3-5.571-3",
-        title: "Operations preserved",
-        text: "Surface engraving, line engraving and cutting stay separate: as colours in DXF/SVG — or natively assigned layers in a Falcon Design Space (.fds) project, no manual setup after import."
-    },
-    {
-        icon: "M9.53 16.122a3 3 0 0 0-5.78 1.128 2.25 2.25 0 0 1-2.4 2.245 4.5 4.5 0 0 0 8.4-2.245c0-.399-.078-.78-.22-1.128Zm0 0a15.998 15.998 0 0 0 3.388-1.62m-5.043-.025a15.994 15.994 0 0 1 1.622-3.395m3.42 3.42a15.995 15.995 0 0 0 4.764-4.648l3.876-5.814a1.151 1.151 0 0 0-1.597-1.597L14.146 6.32a15.996 15.996 0 0 0-4.649 4.763m3.42 3.42a6.776 6.776 0 0 0-3.42-3.42",
-        title: "0.01 mm precision",
-        text: "Bezier curves are adaptively flattened to polylines at a hundredth of a millimetre — far below any laser spot size, readable by every CAM tool."
-    },
-    {
-        icon: "M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5",
-        title: "Free & open source",
-        text: "No paywall, no watermark, no limits. The full source code is on GitHub — inspect it, fork it, improve it."
-    }
-];
-
-const steps = [
-    { n: "01", title: "Pick a tool", text: "Convert an xTool project, trace the cut line around a design, or invert it into a negative — each tool is its own page." },
-    { n: "02", title: "Drop your file in", text: "An .xcs / .xs project or a plain .svg. You get an instant preview you can pan and zoom, in real millimetres." },
-    { n: "03", title: "Download in your format", text: "DXF for any CAM software, a native .fds project for Falcon Design Space (operations pre-assigned), or SVG." }
-];
 ---
 
 <Layout
@@ -72,8 +44,9 @@ const steps = [
                class="rounded-xl bg-linear-to-r from-cyan-500 to-violet-500 px-7 py-3.5 font-semibold text-white shadow-xl shadow-violet-500/30 transition hover:brightness-110 active:scale-95">
                 Open a tool
             </a>
-            <a href="#how" class="glass rounded-xl px-7 py-3.5 font-semibold text-slate-200 transition hover:bg-white/10">
-                How it works
+            <a href="https://github.com/bbraeu/LaserKit" target="_blank" rel="noopener"
+               class="glass rounded-xl px-7 py-3.5 font-semibold text-slate-200 transition hover:bg-white/10">
+                Source on GitHub
             </a>
         </div>
 
@@ -126,54 +99,13 @@ const steps = [
                     </a>
                 ))}
             </div>
-        </div>
-    </section>
 
-    <!-- ─────────────────────── Features ─────────────────────── -->
-    <section id="features" class="relative px-4 py-20">
-        <div class="mx-auto w-[min(72rem,100%)]">
-            <div class="reveal text-center">
-                <h2 class="text-3xl font-bold text-white sm:text-4xl">Why these tools?</h2>
-            </div>
-            <div class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-                {features.map((f, i) => (
-                    <article class="glass glow-card reveal rounded-2xl p-6" style={`--reveal-delay: ${i * 90}ms`}>
-                        <div class="grid size-12 place-items-center rounded-xl bg-linear-to-br from-cyan-400/20 to-violet-500/20 ring-1 ring-white/10">
-                            <svg class="size-6 text-cyan-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
-                                <path stroke-linecap="round" stroke-linejoin="round" d={f.icon} />
-                            </svg>
-                        </div>
-                        <h3 class="mt-5 text-lg font-semibold text-white">{f.title}</h3>
-                        <p class="mt-2 text-sm leading-relaxed text-slate-400">{f.text}</p>
-                    </article>
-                ))}
-            </div>
-        </div>
-    </section>
-
-    <!-- ────────────────────── How it works ────────────────────── -->
-    <section id="how" class="relative px-4 py-20">
-        <div class="mx-auto w-[min(72rem,100%)]">
-            <div class="reveal text-center">
-                <h2 class="text-3xl font-bold text-white sm:text-4xl">Three steps. <span class="text-gradient">Zero uploads.</span></h2>
-            </div>
-            <ol class="mt-12 grid gap-5 lg:grid-cols-3">
-                {steps.map((s, i) => (
-                    <li class="glass glow-card reveal relative overflow-hidden rounded-2xl p-7" style={`--reveal-delay: ${i * 110}ms`}>
-                        <span class="text-gradient absolute -top-3 -right-1 text-8xl font-black opacity-20 select-none" aria-hidden="true">{s.n}</span>
-                        <span class="text-sm font-bold tracking-widest text-cyan-300">STEP {s.n}</span>
-                        <h3 class="mt-3 text-lg font-semibold text-white">{s.title}</h3>
-                        <p class="mt-2 text-sm leading-relaxed text-slate-400">{s.text}</p>
-                    </li>
-                ))}
-            </ol>
-            <p class="reveal mx-auto mt-8 max-w-2xl text-center text-sm text-slate-500" style="--reveal-delay: 200ms">
-                Note: DXF/SVG carry geometry and colours, not laser parameters — assign power &amp; speed per colour
+            <p class="reveal mx-auto mt-10 max-w-2xl text-center text-sm text-slate-500" style="--reveal-delay: 200ms">
+                DXF and SVG carry geometry and colours, not laser parameters — assign power &amp; speed per colour
                 once in your laser software. The .fds export pre-assigns the operation per layer; power &amp; speed
                 still come from your material settings. This is beta-grade software; heavily skewed shapes may not
-                convert perfectly. The contour tracer works off a high-resolution render whenever a border is
-                involved, so its cut line is accurate to the tolerance it reports rather than being an exact curve
-                offset — inverting, by contrast, is exact geometry throughout.
+                convert perfectly, and both the contour tracer (whenever a border is involved) and the image tracer
+                work off a raster, so their output is accurate to the tolerance each reports rather than exactly.
             </p>
         </div>
     </section>
