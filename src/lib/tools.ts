@@ -94,6 +94,19 @@ export const TOOLS: ToolDef[] = [
         description: "Free in-browser box generator for laser cutting: finger-jointed boxes at any size, measured inside or outside, with a lay-on, tray, hinged or closed lid, an inset floor, cross-lapped dividers and kerf compensation on every joint. Exports SVG, DXF and Falcon Design Space (.fds)."
     },
     {
+        id: "qr",
+        slug: "qr/",
+        label: "QR code",
+        short: "QR",
+        hint: "a link → a code to engrave",
+        blurb: "A QR code as real geometry, with the squares merged into runs so the head is not chasing a thousand of them — and the module size shown, because that is what decides whether a phone can read it.",
+        // The three finder patterns and a scatter of modules.
+        icon: "M3.75 3.75h6v6h-6zM14.25 3.75h6v6h-6zM3.75 14.25h6v6h-6zM14.25 14.25h2.25v2.25h-2.25zM18 18h2.25v2.25H18zM14.25 18.75v1.5M18.75 14.25h1.5",
+        accepts: "nothing — it starts from what you type",
+        title: "QR code to SVG or DXF for laser engraving | LaserKit",
+        description: "Free in-browser QR code generator for laser cutting and engraving: any text or link as vector geometry at true size, with adjustable error correction, quiet border and module size, plus a cut-tile inlay mode. Exports SVG, DXF and Falcon Design Space (.fds)."
+    },
+    {
         id: "puzzle",
         slug: "puzzle/",
         label: "Jigsaw puzzle",

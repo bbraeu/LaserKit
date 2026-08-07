@@ -30,6 +30,19 @@ export const REPO = "https://github.com/bbraeu/LaserKit";
 
 export const RELEASES: Release[] = [
     {
+        version: "3.9.0",
+        date: "2026-08-07",
+        title: "QR codes",
+        tools: ["qr"],
+        notes: [
+            "New tool. Any text or link as vector geometry at true size, with the error correction, the quiet border and the plate all adjustable.",
+            "The module size is a status-bar figure that turns amber, because that is the one number that decides whether a phone can read it — under about 0.6 mm the beam's own width is a large fraction of a square.",
+            "Runs of dark squares along a row are merged into one rectangle each: a version 5 code is over a thousand squares, and unmerged the head spends most of the job travelling between them.",
+            "Cutting is offered only as an inlay, because a QR code cannot be cut out of one piece — the middle of every finder pattern is an island with nothing holding it. The tool says how many loose tiles that makes.",
+            "The encoding comes from a twenty-year-old dependency rather than being written here: a wrong QR code looks exactly like a right one, and this project cannot decode one to tell."
+        ]
+    },
+    {
         version: "3.8.1",
         date: "2026-08-07",
         title: "Puzzle pieces that actually differ",

@@ -1,0 +1,103 @@
+---
+import ToolPage from "../components/ToolPage.astro";
+import QrTool from "../tools/QrTool";
+---
+
+<ToolPage tool="qr">
+    <Fragment slot="lead">
+        A QR code as real vector geometry at true size, ready to engrave. The one number that decides whether a phone
+        can actually read it — <strong class="text-slate-300">how big one module comes out</strong> — is in the status
+        bar rather than left for you to discover on the material.
+    </Fragment>
+
+    <QrTool client:only="react">
+        <div slot="fallback" class="flex h-[100dvh] flex-col bg-[#08090d]">
+            <div class="h-12 shrink-0 border-b border-white/7"></div>
+            <div class="flex min-h-0 flex-1">
+                <div class="hidden w-60 shrink-0 border-r border-white/7 xl:block"></div>
+                <div class="flex-1"></div>
+                <div class="hidden w-76 shrink-0 border-l border-white/7 xl:block"></div>
+            </div>
+            <div class="h-7 shrink-0 border-t border-white/7"></div>
+        </div>
+    </QrTool>
+
+    <section slot="notes" class="relative px-4 pb-24">
+        <div class="mx-auto w-[min(72rem,100%)]">
+            <div class="grid gap-5 lg:grid-cols-3">
+                <article class="glass reveal rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">The module size is the whole game</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        A QR code fails in one direction: the squares get too small. Under about
+                        <strong class="text-slate-300">0.6 mm</strong> the beam's own width is a large fraction of a
+                        module, the edges blur into each other and a phone gives up — and none of that is visible in
+                        the drawing. So the module size is a status-bar figure that turns amber, not something buried
+                        in a preview. Two ways to fix it: a bigger plate, or less in the code.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 110ms">
+                    <h2 class="text-lg font-semibold text-white">Correction is redundancy, not quality</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Error correction does not make the code sharper — it adds modules that let a reader recover
+                        from missing ones. On engraved work the case for it is stronger than in print: a scorched
+                        corner, a chipped edge and a surface that has been handled for a year are exactly the damage it
+                        exists for. <strong class="text-slate-300">M</strong> is the sensible default;
+                        <strong class="text-slate-300">Q</strong> for something that gets picked up.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 220ms">
+                    <h2 class="text-lg font-semibold text-white">The quiet border is not padding</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        The four modules of blank space around a code are how a scanner works out where the code stops.
+                        Readers genuinely fail without them, especially on a busy surface — a grain, a previous
+                        engraving, the edge of the piece. The spec asks for four and so does this tool.
+                    </p>
+                </article>
+            </div>
+
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">You cannot cut a QR code out of one piece</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    It is the first thing everyone tries. Cut the dark squares out of a plate and the middle of every
+                    finder pattern — plus most of the light area — is an enclosed island with nothing holding it, and
+                    all of it drops through the bed. There is no bridging scheme that saves it either: the light
+                    regions <em>are</em> the code, and a bridge across one changes what it says.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    So cutting is offered as an <strong class="text-slate-300">inlay</strong>: the dark squares come
+                    off the bed as loose tiles to drop into a light plate. It works, it looks superb in two woods, and
+                    it is a great many small pieces that are not interchangeable — the tool tells you how many before
+                    you start. For everything else, engrave: the contrast comes from the burn and nothing can fall out.
+                </p>
+            </div>
+
+            <div class="grid gap-5 lg:grid-cols-2">
+                <div class="glass reveal mt-5 rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">Merged into runs</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        A version 5 code is over a thousand little squares. Engraved as a thousand separate rectangles
+                        the head spends most of the job travelling between them, so runs of dark modules along a row
+                        become one rectangle each — the same burnt area in a fraction of the moves. The status bar
+                        shows both counts.
+                    </p>
+                </div>
+                <div class="glass reveal mt-5 rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">The encoding is not ours</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        A QR code that is wrong does not look wrong — it looks like a QR code and simply refuses to
+                        scan. The only honest way to prove one is right is to decode it, and this project cannot do
+                        that in its own tests. So the encoding comes from a twenty-year-old library with no
+                        dependencies, and what is tested here is everything done <em>with</em> its answer: that every
+                        dark module is covered, that no light one is, and that the code lands where it says it does.
+                    </p>
+                </div>
+            </div>
+
+            <p class="reveal mt-5 text-xs leading-relaxed text-slate-500">
+                Test the finished piece with the phone you expect people to use, at the distance you expect them to use
+                it from, under the light it will live under. A code that scans on a bench under a lamp and fails on a
+                wall in a corridor is the normal outcome, not an unlucky one.
+            </p>
+        </div>
+    </section>
+</ToolPage>
