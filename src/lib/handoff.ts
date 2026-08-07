@@ -29,8 +29,14 @@ export interface Handoff {
     from: string;
 }
 
-/** Tools that take a design, and can therefore be handed one. */
-export const HANDOFF_TARGETS = ["contour", "stamp"];
+/**
+ * Tools that take a design, and can therefore be handed one.
+ *
+ * Nesting is last because it is what you do once the design is finished: make
+ * the keychain, then fill a sheet with it. Sending *from* it would hand the
+ * next tool a sheet of two hundred copies, which is why nothing does.
+ */
+export const HANDOFF_TARGETS = ["contour", "stamp", "nest"];
 
 /** The tools a design can be sent to from here. */
 export const handoffTargets = (from: string): string[] =>

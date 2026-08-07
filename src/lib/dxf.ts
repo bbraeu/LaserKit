@@ -13,6 +13,16 @@ export interface Point {
 export interface Subpath {
     points: Point[];
     closed: boolean;
+    /**
+     * What the laser is meant to do with it, where the source said so.
+     *
+     * Left off by everything that only cares about shape — the contour tracer
+     * and the stamp maker read a design to find its silhouette, and a silhouette
+     * has no operation. The nesting tool is the one that must not lose it:
+     * twenty copies of a keychain whose lettering has become a cut line is
+     * twenty ruined blanks.
+     */
+    operation?: Operation;
 }
 
 export interface DxfEntity {
@@ -51,6 +61,40 @@ export const DEFAULT_OPERATION: Operation = { name: "Other", color: 7, css: "#00
 
 export const getOperationFor = (processingType: string | undefined): Operation =>
     (processingType && OPERATION_COLORS[processingType]) || DEFAULT_OPERATION;
+
+/** "#ff0000" or "rgb(255, 0, 0)" as one number, or null for none/transparent. */
+const parseCss = (s: string | null): number | null => {
+    if (!s) return null;
+    const t = s.trim().toLowerCase();
+    if (t === "none" || t === "transparent" || t === "") return null;
+    const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/.exec(t);
+    if (hex) {
+        const h = hex[1]!;
+        return h.length === 3
+            ? parseInt(h[0]! + h[0]! + h[1]! + h[1]! + h[2]! + h[2]!, 16)
+            : parseInt(h, 16);
+    }
+    const rgb = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/.exec(t);
+    if (!rgb) return null;
+    return (Math.round(Number(rgb[1])) << 16) | (Math.round(Number(rgb[2])) << 8) | Math.round(Number(rgb[3]));
+};
+
+/**
+ * The operation a colour stands for, if it stands for one.
+ *
+ * Colour *is* the operation in a laser SVG — it is how LightBurn, Falcon Design
+ * Space and this kit's own exports all group a job, and the reason the DXF
+ * writer colours entities rather than layering them. So a design read back in
+ * can be put on the right operations again simply by looking at it, with one
+ * caveat worth being strict about: only an exact match counts. A design in some
+ * other palette gets nothing rather than a guess, because a guess here is an
+ * engraving cut clean out of the sheet.
+ */
+export const operationForCss = (sFill: string | null, sStroke: string | null): Operation | undefined => {
+    const n = parseCss(sFill) ?? parseCss(sStroke);
+    if (n === null) return undefined;
+    return Object.values(OPERATION_COLORS).find(o => parseCss(o.css) === n);
+};
 
 // ---------------------------------------------------------------------------
 // SVG path flattening

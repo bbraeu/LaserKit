@@ -41,6 +41,23 @@ export const svgTwoItems = (): Fixture => file(
      </svg>`
 );
 
+/**
+ * A 30 × 20 mm blank with an engraved bar inside a cut outline.
+ *
+ * The colours are the kit's own operation colours, which is how every laser
+ * SVG says what to do with what — red cuts, blue is surface engraving. The
+ * nesting tool is read against this: a copy whose engraving has become a cut
+ * line is a ruined blank, and only a coloured fixture can catch it.
+ */
+export const svgTwoOperations = (): Fixture => file(
+    "blank.svg",
+    "image/svg+xml",
+    `<svg xmlns="http://www.w3.org/2000/svg" width="30mm" height="20mm" viewBox="0 0 30 20">
+        <rect x="0" y="0" width="30" height="20" fill="none" stroke="#ff0000" stroke-width="0.3"/>
+        <rect x="6" y="8" width="18" height="4" fill="#1e6bff"/>
+     </svg>`
+);
+
 /** An SVG with no physical size at all — the "96 dpi was assumed" path. */
 export const svgNoSize = (): Fixture => file(
     "unsized.svg",

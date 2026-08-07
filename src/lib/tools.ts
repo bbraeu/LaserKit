@@ -94,6 +94,19 @@ export const TOOLS: ToolDef[] = [
         description: "Free in-browser box generator for laser cutting: finger-jointed boxes at any size, measured inside or outside, with a lay-on, tray, hinged or closed lid, an inset floor, cross-lapped dividers and kerf compensation on every joint. Exports SVG, DXF and Falcon Design Space (.fds)."
     },
     {
+        id: "nest",
+        slug: "nest/",
+        label: "Nest on a sheet",
+        short: "Nest",
+        hint: ".svg / .xcs / .xs → a full sheet",
+        blurb: "Lay as many copies of a design on a sheet as will fit, in rows, with the gap and the margin you set — and with every engraving still an engraving.",
+        // Four tiles on a sheet: the thing itself.
+        icon: "M3.75 4.5h6.75v6.75H3.75zM13.5 4.5h6.75v6.75H13.5zM3.75 13.5h6.75v6.75H3.75zM13.5 13.5h6.75v6.75H13.5z",
+        accepts: ".svg, .xcs, .xs",
+        title: "Nest a design on a sheet — laser cutting layout tool | LaserKit",
+        description: "Free in-browser nesting tool for laser cutting: fill a sheet with copies of one design, or lay out a set number, with an adjustable gap, an edge margin and an optional quarter turn. Keeps engraving and cutting apart. Exports SVG, DXF and Falcon Design Space (.fds)."
+    },
+    {
         id: "hinge",
         slug: "hinge/",
         label: "Living hinge",

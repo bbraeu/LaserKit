@@ -1,4 +1,5 @@
 import { getCanvasGeometry, getLocalGeometry } from "./convert";
+import { operationForCss } from "./dxf";
 import type { XcsProject } from "./convert";
 import { FLATTEN_TOLERANCE } from "./dxf";
 import type { Point, Subpath } from "./dxf";
@@ -176,6 +177,61 @@ export const circleRing = (cx: number, cy: number, r: number): Point[] => ellips
 export const shiftRing = (a: Point[], dx: number, dy: number): Point[] =>
     a.map(p => ({ x: p.x + dx, y: p.y + dy }));
 
+export interface Placement {
+    /** where this item's bounding box goes */
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    /** turned a quarter turn, so w and h are the source's h and w */
+    turned: boolean;
+}
+
+/**
+ * Shelf packing: rows across a sheet, then down.
+ *
+ * Not the best packing there is — cutting an outline into another outline's
+ * concavity would beat it every time — but real nesting of arbitrary contours
+ * is NP-hard, and the honest trade is stated wherever this is used rather than
+ * hidden behind a progress bar. Bounding boxes in rows is what a person does by
+ * hand, and it is within a few per cent of that for the parts a laser cuts.
+ *
+ * Items are placed in the order given. A part wider than the sheet widens the
+ * layout rather than vanishing off it, and the caller is told how many.
+ */
+export const shelfPack = (
+    aSize: { w: number; h: number }[],
+    sheet: number,
+    gap: number,
+    /** a portrait item may be laid on its side if that fits the row better */
+    bTurn = false
+): { aPlaced: Placement[]; width: number; height: number; over: number } => {
+    const over = aSize.filter(o => Math.min(o.w, bTurn ? o.h : o.w) > sheet).length,
+        wMax = Math.max(sheet, ...aSize.map(o => (bTurn ? Math.min(o.w, o.h) : o.w)));
+
+    let x = 0, y = 0, hRow = 0, wUsed = 0;
+    const aPlaced = aSize.map(o => {
+        // Turned only when it is the difference between fitting this row and
+        // starting a new one: rotating for its own sake makes a sheet no
+        // smaller and makes the grain run four ways.
+        const turned = bTurn && o.h < o.w && x > 0 && x + o.w > wMax + 1e-6 && x + o.h <= wMax + 1e-6,
+            w = turned ? o.h : o.w,
+            h = turned ? o.w : o.h;
+        if (x > 0 && x + w > wMax + 1e-6) {
+            x = 0;
+            y += hRow + gap;
+            hRow = 0;
+        }
+        const out: Placement = { x, y, w, h, turned };
+        x += w + gap;
+        hRow = Math.max(hRow, h);
+        wUsed = Math.max(wUsed, x - gap);
+        return out;
+    });
+
+    return { aPlaced, width: wUsed, height: y + hRow, over };
+};
+
 export const distToSegment = (p: Point, a: Point, b: Point): number => {
     const vx = b.x - a.x,
         vy = b.y - a.y,
@@ -326,10 +382,16 @@ const extractSvgGeometry = (doc: SvgDoc): { aSub: Subpath[]; warnings: string[] 
         svg.querySelectorAll<SVGGraphicsElement>("path,rect,circle,ellipse,line,polygon,polyline,image").forEach(el => {
             const m = el.getCTM();
             if (!m) return;
+            // Read off the element rather than the file's markup, so a colour
+            // set by a class, by a parent group or by presentation attribute
+            // all arrive the same way.
+            const style = getComputedStyle(el),
+                operation = operationForCss(style.fill, style.stroke);
             getLocalGeometry(el).forEach(sub => {
                 if (sub.points.length < 2) return;
                 aSub.push({
                     closed: sub.closed,
+                    operation,
                     points: sub.points.map(p => ({
                         x: m.a * p.x + m.c * p.y + m.e,
                         y: m.b * p.x + m.d * p.y + m.f

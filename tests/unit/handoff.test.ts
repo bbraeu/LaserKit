@@ -40,8 +40,11 @@ describe("handoff", () => {
     it("never offers to send a design to the tool it came from", () => {
         expect(handoffTargets("stamp")).not.toContain("stamp");
         expect(handoffTargets("stamp")).toContain("contour");
-        // The converter and the tracer take a file, not a design, so both of the
-        // design tools stay on offer from them.
-        expect(handoffTargets("trace")).toEqual(["contour", "stamp"]);
+        // The converter and the tracer take a file, not a design, so every one
+        // of the design tools stays on offer from them.
+        expect(handoffTargets("trace")).toEqual(["contour", "stamp", "nest"]);
+        // Nesting is the end of the chain: it can be handed a design, and what
+        // it makes — two hundred copies on a sheet — is nobody's input.
+        expect(handoffTargets("nest")).not.toContain("nest");
     });
 });

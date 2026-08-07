@@ -509,11 +509,18 @@ const extractCanvasGeometry = (oJSON: XcsProject, oCanvas: XcsCanvas, aExcluded:
 };
 
 /**
- * Every subpath of a canvas in millimetres, operation types dropped — what the
- * outline tracer needs to find the contour around a design.
+ * Every subpath of a canvas in millimetres, each tagged with what the project
+ * said to do with it.
+ *
+ * The outline tracer and the stamp maker ignore the tag — they are after a
+ * silhouette, which has no operation — but it costs nothing to carry and the
+ * nesting tool would be useless without it.
  */
 export const getCanvasGeometry = (oJSON: XcsProject, oCanvas: XcsCanvas): Subpath[] =>
-    extractCanvasGeometry(oJSON, oCanvas, []).flatMap(o => o.subpaths);
+    extractCanvasGeometry(oJSON, oCanvas, []).flatMap(o => {
+        const operation = getOperationFor(o.processingType);
+        return o.subpaths.map(sub => ({ ...sub, operation }));
+    });
 
 const processCanvasDXF = (oJSON: XcsProject, oCanvas: XcsCanvas, aExcluded: string[]): CanvasDxfResult => {
     const aEntities: DxfEntity[] = extractCanvasGeometry(oJSON, oCanvas, aExcluded).flatMap(oGeo => {

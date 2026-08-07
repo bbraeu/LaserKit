@@ -1,4 +1,4 @@
-import { arcSegments, circleRing, dedupe, pathData, r3, rectRing, ringBounds, shiftRing } from "./design";
+import { arcSegments, circleRing, dedupe, pathData, r3, rectRing, ringBounds, shelfPack, shiftRing } from "./design";
 import { OPERATION_COLORS, buildDxf } from "./dxf";
 import type { DxfEntity, Operation, Point } from "./dxf";
 import { buildFds } from "./fds";
@@ -976,36 +976,35 @@ interface Placed extends Part {
     h: number;
 }
 
-/** Shelf packing in build order: rows across the sheet, then down. */
+/**
+ * The parts laid out on a sheet, in build order.
+ *
+ * The packing itself is `shelfPack`, shared with the nesting tool — the panels
+ * of a box and a hundred copies of one keychain are the same problem, and two
+ * copies of the answer would be two chances to disagree about what a gap is.
+ * Never turned: a box panel's grain runs the way it was drawn, and a wall laid
+ * on its side is a wall that snaps along the ply.
+ */
 const layOut = (aPart: Part[], sheet: number, gap: number): { aPlaced: Placed[]; width: number; height: number; over: number } => {
     const aBox = aPart.map(p => ringBounds([...p.cut, ...p.engrave, ...(p.slits ?? [])])),
-        over = aBox.filter(b => b.x1 - b.x0 > sheet).length,
-        wMax = Math.max(sheet, ...aBox.map(b => b.x1 - b.x0));
+        aSize = aBox.map(b => ({ w: b.x1 - b.x0, h: b.y1 - b.y0 })),
+        pack = shelfPack(aSize, sheet, gap);
 
-    let x = 0, y = 0, hRow = 0, wUsed = 0;
     const aPlaced = aPart.map((p, i) => {
         const b = aBox[i]!,
-            w = b.x1 - b.x0,
-            h = b.y1 - b.y0;
-        if (x > 0 && x + w > wMax + 1e-6) {
-            x = 0;
-            y += hRow + gap;
-            hRow = 0;
-        }
-        const out: Placed = {
+            q = pack.aPlaced[i]!,
+            dx = q.x - b.x0,
+            dy = q.y - b.y0;
+        return {
             ...p,
-            cut: moveRings(p.cut, x - b.x0, y - b.y0),
-            engrave: moveRings(p.engrave, x - b.x0, y - b.y0),
-            slits: p.slits ? moveRings(p.slits, x - b.x0, y - b.y0) : undefined,
-            x, y, w, h
+            cut: moveRings(p.cut, dx, dy),
+            engrave: moveRings(p.engrave, dx, dy),
+            slits: p.slits ? moveRings(p.slits, dx, dy) : undefined,
+            x: q.x, y: q.y, w: q.w, h: q.h
         };
-        x += w + gap;
-        hRow = Math.max(hRow, h);
-        wUsed = Math.max(wUsed, x - gap);
-        return out;
     });
 
-    return { aPlaced, width: wUsed, height: y + hRow, over };
+    return { aPlaced, width: pack.width, height: pack.height, over: pack.over };
 };
 
 /** How far the head travels along an open line, which does not come back. */

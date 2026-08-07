@@ -28,7 +28,7 @@ test.describe("workspace shell", () => {
     // the default slot above the island pushes the whole app down the page and
     // renders above the toolbar, which is exactly how a stray row of operation
     // chips once ended up sitting on top of the converter.
-    for (const slug of ["convert", "contour", "trace", "text", "stamp", "box", "hinge"]) {
+    for (const slug of ["convert", "contour", "trace", "text", "stamp", "box", "hinge", "nest"]) {
         test(`opens ${slug} with the workspace filling the first screen`, async ({ page }) => {
             await openTool(page, slug);
             const box = (await page.getByTestId("workspace").boundingBox())!;

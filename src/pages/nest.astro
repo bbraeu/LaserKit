@@ -1,0 +1,97 @@
+---
+import ToolPage from "../components/ToolPage.astro";
+import NestTool from "../tools/NestTool";
+---
+
+<ToolPage tool="nest">
+    <Fragment slot="lead">
+        Drop a design and get a full sheet of it. Set the material you are putting on the bed, how far apart the
+        copies should sit and how much to keep clear of the edge, and the tool says how many fit — with every
+        engraving <strong class="text-slate-300">still an engraving</strong> and every cut line still a cut line.
+    </Fragment>
+
+    <NestTool client:only="react">
+        <div slot="fallback" class="flex h-[100dvh] flex-col bg-[#08090d]">
+            <div class="h-12 shrink-0 border-b border-white/7"></div>
+            <div class="flex min-h-0 flex-1">
+                <div class="hidden w-60 shrink-0 border-r border-white/7 xl:block"></div>
+                <div class="flex-1"></div>
+                <div class="hidden w-76 shrink-0 border-l border-white/7 xl:block"></div>
+            </div>
+            <div class="h-7 shrink-0 border-t border-white/7"></div>
+        </div>
+    </NestTool>
+
+    <section slot="notes" class="relative px-4 pb-24">
+        <div class="mx-auto w-[min(72rem,100%)]">
+            <div class="grid gap-5 lg:grid-cols-2">
+                <article class="glass reveal rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">Rows, and why that is the honest answer</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Copies are packed as bounding boxes in rows across the sheet. Real nesting — sliding one
+                        outline into the hollow of another, turning each part to whatever angle wastes least — is
+                        NP-hard, and every honest implementation is a solver that runs for minutes and still cannot
+                        promise it found the best layout.
+                    </p>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        What is here is what a person does by hand: put them in rows. For the parts a laser actually
+                        cuts, that lands within a few per cent of a hand layout and it is instant. Where rows are a
+                        bad fit — a big L-shaped part, a crescent — it is <em>visibly</em> bad on the canvas rather
+                        than quietly bad in the file, and you can see that in a second and go and do it by hand.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 110ms">
+                    <h2 class="text-lg font-semibold text-white">The operations survive</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        This is the whole reason to use a tool rather than copy-paste in a laser program. A design's
+                        colours say what the laser should do with each part of it — that is how LightBurn, Falcon
+                        Design Space and this kit's own exports all group a job — and those colours are read back in
+                        and kept.
+                    </p>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Twenty copies of a keychain whose lettering has quietly become a cut line is twenty ruined
+                        blanks, and nothing on screen tells you until the sheet is on the bed. If a design's colours
+                        mean nothing to the tool, it says so rather than guessing: an unrecognised palette comes out
+                        on one unnamed operation for you to assign, instead of an engraving cut clean out of the
+                        sheet.
+                    </p>
+                </article>
+            </div>
+
+            <div class="mt-5 grid gap-5 lg:grid-cols-3">
+                <article class="glass reveal rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">The gap is not decoration</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        At zero, two copies' cut lines fall on top of each other: the beam goes down the same slot
+                        twice, the edge scorches and the two parts can weld back together at the bottom. Two or three
+                        millimetres is enough. It is also where the sheet gives when it warps as it heats.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 110ms">
+                    <h2 class="text-lg font-semibold text-white">The margin has a job</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Two things live in it: whatever is holding the sheet down, and the last few millimetres of the
+                        bed where the beam is least square to the material. The sheet and the margin are both drawn as
+                        dashed guides and neither is in any export — they are where the material is, not something to
+                        burn.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 220ms">
+                    <h2 class="text-lg font-semibold text-white">All or none, on the turn</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Every copy is the same shape, so mixing orientations packs no tighter — it only makes the
+                        grain run two ways. The design is laid on its side only when the whole sheet fits more that
+                        way, which is rarer than it sounds: the counts are symmetric until the truncation bites.
+                    </p>
+                </article>
+            </div>
+
+            <p class="reveal mt-5 text-xs leading-relaxed text-slate-500">
+                "Sheet used" is how much of the sheet the copies' bounding <em>boxes</em> cover — not how much material
+                is consumed. The space inside a design's own outline counts towards it and is still there when the
+                cutting is done. Kerf is not compensated: every copy comes out a beam's width smaller than drawn, the
+                same as it would on its own.
+            </p>
+        </div>
+    </section>
+</ToolPage>
