@@ -14,7 +14,7 @@ const BASE: PuzzleOptions = {
     height: 150,
     cols: 5,
     rows: 4,
-    jitter: 0.5,
+    difficulty: 0.5,
     knob: 0.2,
     radius: 0,
     seed: 3,
@@ -48,10 +48,12 @@ describe("the grid", () => {
         expect(b.y1).toBeLessThanOrEqual(r.height + 0.01);
     });
 
-    it("starts and ends every joint exactly on the grid", () => {
+    it("starts and ends every joint exactly on the grid, at difficulty 0", () => {
         // A joint that missed its corner by a hair would leave the piece
-        // attached by a sliver nobody can see and everybody can feel.
-        const r = puzzle({ cols: 4, rows: 3 });
+        // attached by a sliver nobody can see and everybody can feel. Above 0
+        // the corners deliberately wander, and that they still *meet* is
+        // checked under difficulty below.
+        const r = puzzle({ cols: 4, rows: 3, difficulty: 0 });
         for (const a of r.joints) {
             const p = a[0]!, q = a[a.length - 1]!,
                 onGrid = (v: number, step: number) => Math.abs(v / step - Math.round(v / step)) < 1e-6;
@@ -78,7 +80,7 @@ describe("the knob", () => {
     };
 
     it("sticks out on one side of the line and only just crosses to the other", () => {
-        const r = puzzle({ jitter: 0 });
+        const r = puzzle({ difficulty: 0 });
         for (const a of r.joints) {
             const { lo, hi } = swing(a),
                 out = Math.max(hi, -lo),
@@ -92,7 +94,7 @@ describe("the knob", () => {
     it("undercuts: the head is wider than the neck", () => {
         // The whole of what makes a jigsaw hold. Measured along the joint: the
         // widest part of the knob must be past the narrowest part of the neck.
-        const r = puzzle({ jitter: 0, cols: 2, rows: 2, width: 100, height: 100 });
+        const r = puzzle({ difficulty: 0, cols: 2, rows: 2, width: 100, height: 100 });
         const a = r.joints[0]!,
             p = a[0]!, q = a[a.length - 1]!,
             dx = q.x - p.x, dy = q.y - p.y,
@@ -114,8 +116,8 @@ describe("the knob", () => {
     });
 
     it("scales with the piece and never with the sheet", () => {
-        const small = puzzle({ width: 100, height: 100, cols: 5, rows: 5, jitter: 0 }),
-            big = puzzle({ width: 200, height: 200, cols: 5, rows: 5, jitter: 0 });
+        const small = puzzle({ width: 100, height: 100, cols: 5, rows: 5, difficulty: 0 }),
+            big = puzzle({ width: 200, height: 200, cols: 5, rows: 5, difficulty: 0 });
         // Across the joint, not along it: the length of a joint is the piece,
         // and it is the knob standing out of it that has to keep in step.
         const reach = (r: typeof small) => {
@@ -127,24 +129,57 @@ describe("the knob", () => {
     });
 });
 
-describe("seed and jitter", () => {
+describe("seed and difficulty", () => {
     it("is the same puzzle for the same seed", () => {
         expect(puzzle({ seed: 9 }).preview).toBe(puzzle({ seed: 9 }).preview);
         expect(puzzle({ seed: 9 }).preview).not.toBe(puzzle({ seed: 10 }).preview);
     });
 
-    it("makes every piece the same shape at zero jitter, and says so", () => {
-        const r = puzzle({ jitter: 0 });
+    it("makes every piece the same shape at zero difficulty, and says so", () => {
+        const r = puzzle({ difficulty: 0 });
         expect(r.warnings.some(s => /every piece fits every socket/.test(s))).toBe(true);
-        expect(puzzle({ jitter: 0.5 }).warnings.some(s => /every piece fits every socket/.test(s))).toBe(false);
+        expect(puzzle({ difficulty: 0.5 }).warnings.some(s => /every piece fits every socket/.test(s))).toBe(false);
     });
 
-    it("moves the knobs along their edges without changing how they lock", () => {
-        const still = puzzle({ jitter: 0 }),
-            moved = puzzle({ jitter: 1 });
-        expect(moved.joints.length).toBe(still.joints.length);
-        // Same number of joints, different shapes.
-        expect(moved.preview).not.toBe(still.preview);
+    it("makes the pieces different sizes as it gets harder", () => {
+        // The biggest thing difficulty does, and the thing the old jitter did
+        // not do at all: at 0 every cell is identical, and by 1 they are not.
+        expect(puzzle({ difficulty: 0 }).spread).toBeCloseTo(1);
+        // Averaged over seeds, because one seed's spread is one roll of the
+        // dice: what has to hold is that the slider means something, not that
+        // any particular puzzle lands on a number.
+        const mean = (difficulty: number) =>
+            [1, 2, 3, 4, 5].reduce((n, seed) => n + puzzle({ difficulty, seed }).spread, 0) / 5;
+        expect(mean(0.5)).toBeGreaterThan(1.3);
+        expect(mean(1)).toBeGreaterThan(mean(0.5) * 1.2);
+    });
+
+    it("still meets at every corner however far they have wandered", () => {
+        // Two joints share a lattice corner. If they read it separately the
+        // pieces would be joined by a sliver, or not at all.
+        const r = puzzle({ difficulty: 1, cols: 4, rows: 3 });
+        const ends = r.joints.flatMap(a => [a[0]!, a[a.length - 1]!]);
+        for (const e of ends) {
+            // Every joint end is shared with another joint's end, or sits on
+            // the border.
+            const shared = ends.filter(o => Math.hypot(o.x - e.x, o.y - e.y) < 1e-6).length,
+                onEdge = e.x < 1e-6 || e.y < 1e-6
+                    || Math.abs(e.x - r.width) < 1e-6 || Math.abs(e.y - r.height) < 1e-6;
+            expect(shared > 1 || onEdge, `end at ${e.x},${e.y}`).toBe(true);
+        }
+    });
+
+    it("keeps the knobs off each other when a corner has wandered close", () => {
+        // A knob is capped to a share of its own edge, so a short edge gets a
+        // small knob rather than one that swallows the piece beside it.
+        const r = puzzle({ difficulty: 1, cols: 8, rows: 6 });
+        for (const a of r.joints) {
+            const p0 = a[0]!, q = a[a.length - 1]!,
+                len = Math.hypot(q.x - p0.x, q.y - p0.y),
+                dx = (q.x - p0.x) / len, dy = (q.y - p0.y) / len,
+                reach = Math.max(...a.map(s => Math.abs((s.x - p0.x) * -dy + (s.y - p0.y) * dx)));
+            expect(reach).toBeLessThanOrEqual(len * 0.43);
+        }
     });
 });
 

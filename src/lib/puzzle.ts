@@ -52,13 +52,22 @@ export interface PuzzleOptions {
     cols: number;
     rows: number;
     /**
-     * How far a knob may wander from the middle of its edge, 0…1.
+     * How different the pieces are from each other, 0…1.
      *
-     * 0 is a grid of identical pieces, which is a puzzle you can solve by shape
-     * alone — every piece fits every socket. Raising it is what makes the
-     * pieces tell each other apart.
+     * This is the difficulty. At 0 it is a perfect lattice of identical pieces
+     * — a handsome object and a broken puzzle, because every piece fits every
+     * socket and there is nothing to work out. Raising it moves three things at
+     * once, and it takes all three to make pieces that genuinely argue:
+     *
+     *   · the corners of the lattice wander, so the pieces are different
+     *     *sizes* and the joints are no longer straight lines;
+     *   · each knob slides along its own edge;
+     *   · each knob is a different size.
+     *
+     * What it never touches is the neck. Where a knob sits and how big it is
+     * are difficulty; whether it locks is not negotiable.
      */
-    jitter: number;
+    difficulty: number;
     /** knob size as a fraction of the shorter side of a piece, 0.1…0.35 */
     knob: number;
     /** rounded outer corners, mm */
@@ -78,9 +87,11 @@ export interface PuzzleResult {
     width: number;
     height: number;
     pieces: number;
-    /** one piece, mm */
+    /** the average piece, mm — they differ once the difficulty is up */
     pieceW: number;
     pieceH: number;
+    /** the largest and smallest piece as a fraction of the average */
+    spread: number;
     /** how far the head travels cutting, mm */
     cutLength: number;
     points: number;
@@ -125,11 +136,40 @@ const KNOB: [number, number, number, number, number, number][] = [
 ];
 
 /**
+ * The lattice the pieces are cut on: every corner of every piece.
+ *
+ * Moving these is what makes pieces different *sizes*, and it is the single
+ * biggest thing separating a jigsaw from a waffle. Both joints that meet at a
+ * corner read it from here, so however far it has wandered they still meet
+ * exactly.
+ *
+ * A corner of the board cannot move at all, and a vertex on an edge of the
+ * board may only slide *along* that edge — otherwise the board stops being the
+ * rectangle it was asked for.
+ */
+const lattice = (
+    cols: number,
+    rows: number,
+    pieceW: number,
+    pieceH: number,
+    wobble: number,
+    next: () => number
+): Point[][] =>
+    Array.from({ length: rows + 1 }, (_, r) =>
+        Array.from({ length: cols + 1 }, (_, c) => {
+            const bSideX = c === 0 || c === cols,
+                bSideY = r === 0 || r === rows;
+            return {
+                x: c * pieceW + (bSideX ? 0 : (next() - 0.5) * 2 * wobble * pieceW),
+                y: r * pieceH + (bSideY ? 0 : (next() - 0.5) * 2 * wobble * pieceH)
+            };
+        }));
+
+/**
  * One edge of one piece, as a flattened polyline.
  *
  * The edge runs from `a` to `b`; `out` is which side the knob sticks out of,
- * and `shift` slides it along the edge without touching the waist — jitter is
- * about where the knob is, never about how well it locks.
+ * and `shift` slides it along the edge without touching the waist.
  */
 const edgePath = (a: Point, b: Point, knob: number, out: number, shift: number): Point[] => {
     const dx = b.x - a.x,
@@ -167,39 +207,51 @@ export const buildPuzzle = (opt: PuzzleOptions): PuzzleResult => {
         rows = Math.round(clamp(opt.rows, L.minPieces, L.maxPieces)),
         pieceW = W / cols,
         pieceH = H / rows,
-        jitter = clamp(opt.jitter, 0, 1),
+        hard = clamp(opt.difficulty, 0, 1),
         // Of the shorter side, so a long thin piece does not get a knob taller
         // than the piece is wide.
         knob = clamp(opt.knob, 0.1, 0.35) * Math.min(pieceW, pieceH),
         next = rng(opt.seed);
 
-    const joints: Point[][] = [];
+    // How far each of the three things may move at this difficulty. The corner
+    // wander is deliberately the largest of them: a knob in a different place
+    // is a detail, a piece of a different size is a different piece.
+    const wobble = 0.22 * hard,
+        slide = 0.20 * hard,
+        vary = 0.70 * hard;
 
-    // Vertical joints: the lines between column c−1 and column c.
+    const grid = lattice(cols, rows, pieceW, pieceH, wobble, next),
+        joints: Point[][] = [];
+
+    /** One joint between two lattice corners, with its own knob. */
+    const joint = (a: Point, b: Point): void => {
+        const len = Math.hypot(b.x - a.x, b.y - a.y),
+            // Never more than a share of this edge's own length, so a knob on a
+            // corner that has wandered close to its neighbour does not swallow
+            // the piece between them.
+            size = Math.min(knob * (1 + (next() - 0.5) * vary), len * 0.42);
+        joints.push(edgePath(a, b, size, next() < 0.5 ? 1 : -1, (next() - 0.5) * slide));
+    };
+
+    // Vertical joints: between column c−1 and column c.
     for (let c = 1; c < cols; c++) {
-        for (let r = 0; r < rows; r++) {
-            const x = c * pieceW;
-            joints.push(edgePath(
-                { x, y: r * pieceH },
-                { x, y: (r + 1) * pieceH },
-                knob,
-                next() < 0.5 ? 1 : -1,
-                (next() - 0.5) * 0.12 * jitter
-            ));
-        }
+        for (let r = 0; r < rows; r++) joint(grid[r]![c]!, grid[r + 1]![c]!);
     }
-
     // Horizontal joints: between row r−1 and row r.
     for (let r = 1; r < rows; r++) {
+        for (let c = 0; c < cols; c++) joint(grid[r]![c]!, grid[r]![c + 1]!);
+    }
+
+    // What the wander did to the pieces, as one number for the panel: the
+    // widest cell over the narrowest.
+    let cellMin = Infinity,
+        cellMax = 0;
+    for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-            const y = r * pieceH;
-            joints.push(edgePath(
-                { x: c * pieceW, y },
-                { x: (c + 1) * pieceW, y },
-                knob,
-                next() < 0.5 ? 1 : -1,
-                (next() - 0.5) * 0.12 * jitter
-            ));
+            const w = grid[r]![c + 1]!.x - grid[r]![c]!.x,
+                h = grid[r + 1]![c]!.y - grid[r]![c]!.y;
+            cellMin = Math.min(cellMin, w * h);
+            cellMax = Math.max(cellMax, w * h);
         }
     }
 
@@ -213,9 +265,9 @@ export const buildPuzzle = (opt: PuzzleOptions): PuzzleResult => {
             + `come out ${mm(knob * 2)} across — thin enough to snap off as the puzzle is broken up.`
         );
     }
-    if (jitter === 0) {
+    if (hard === 0) {
         warnings.push(
-            "With no jitter every piece is the same shape, so every piece fits every socket. That is a lovely object "
+            "At difficulty 0 every piece is the same shape, so every piece fits every socket. That is a lovely object "
             + "and a terrible puzzle."
         );
     }
@@ -254,6 +306,7 @@ export const buildPuzzle = (opt: PuzzleOptions): PuzzleResult => {
         pieces: cols * rows,
         pieceW,
         pieceH,
+        spread: cellMin > 0 ? cellMax / cellMin : 1,
         cutLength,
         points: joints.reduce((n, a) => n + a.length, 0) + outline.reduce((n, a) => n + a.length, 0),
         warnings

@@ -30,6 +30,18 @@ export const REPO = "https://github.com/bbraeu/LaserKit";
 
 export const RELEASES: Release[] = [
     {
+        version: "3.8.1",
+        date: "2026-08-07",
+        title: "Puzzle pieces that actually differ",
+        tools: ["puzzle"],
+        notes: [
+            "The variation slider is now a difficulty slider, and it moves three things instead of one. The old one only slid a knob a few per cent along its edge, which left every piece looking the same.",
+            "The biggest addition: the corners of the lattice wander, so the pieces are different sizes and the joints stop being straight lines. A knob in a different place is a detail; a piece of a different size is a different piece.",
+            "Each knob also varies in size, capped to a share of its own edge so it cannot swallow a piece whose corner has wandered close.",
+            "Both joints meeting at a corner still read it from the same place, so however far it has moved they meet exactly."
+        ]
+    },
+    {
         version: "3.8.0",
         date: "2026-08-07",
         title: "The jigsaw puzzle generator",

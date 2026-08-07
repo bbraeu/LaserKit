@@ -36,8 +36,8 @@ import PuzzleTool from "../tools/PuzzleTool";
                     Lose it and you have a grid of squares with bumps on — which looks perfectly convincing on screen
                     and comes apart in your hands. So the profile here is the classic seven-curve knob with a real
                     waist, every number in it a fraction of the edge so it is the same shape at any piece size, and
-                    the variation control never touches the neck: <em>where</em> a knob sits is jitter, <em>how well
-                    it locks</em> is not.
+                    the difficulty control never touches the neck: <em>where</em> a knob sits and <em>how big</em> it
+                    is are difficulty; whether it locks is not negotiable.
                 </p>
             </div>
 
@@ -72,13 +72,41 @@ import PuzzleTool from "../tools/PuzzleTool";
             </div>
 
             <div class="glass reveal mt-5 rounded-2xl p-6">
-                <h2 class="text-lg font-semibold text-white">Variation, and why zero is a trap</h2>
+                <h2 class="text-lg font-semibold text-white">What difficulty actually moves</h2>
                 <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
-                    At zero variation every piece is the same shape. That is a genuinely handsome object — a perfect
-                    lattice — and a completely broken puzzle: every piece fits every socket, so there is nothing to
-                    solve and no way to know you are wrong. The tool says so in the status bar rather than leaving you
-                    to find out after cutting. Anything above about 0.3 gives pieces that argue with each other, which
-                    is the point.
+                    Three things at once, and it takes all three to make pieces that genuinely argue with each other:
+                </p>
+                <dl class="mt-4 grid gap-4 text-sm leading-relaxed sm:grid-cols-3">
+                    <div>
+                        <dt class="font-semibold text-slate-200">The corners wander</dt>
+                        <dd class="mt-1 text-slate-400">
+                            The lattice the pieces are cut on stops being a grid, so the pieces are different
+                            <em>sizes</em> and the joints are no longer straight lines. This is the big one: a knob in
+                            a different place is a detail, a piece of a different size is a different piece. Both
+                            joints meeting at a corner read it from the same place, so however far it has moved they
+                            still meet exactly.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Each knob slides</dt>
+                        <dd class="mt-1 text-slate-400">
+                            Along its own edge, so two neighbouring joints do not carry their tabs at the same height
+                            — which is what makes a row of pieces stop looking like a row.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Each knob is a different size</dt>
+                        <dd class="mt-1 text-slate-400">
+                            Capped to a share of its own edge, so a knob on a corner that has wandered close to its
+                            neighbour does not swallow the piece between them.
+                        </dd>
+                    </div>
+                </dl>
+                <p class="mt-3 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    At zero, every piece is the same shape. That is a genuinely handsome object — a perfect lattice —
+                    and a completely broken puzzle: every piece fits every socket, so there is nothing to solve and no
+                    way to know you are wrong. The tool says so in the status bar rather than leaving you to find out
+                    after cutting.
                 </p>
             </div>
 

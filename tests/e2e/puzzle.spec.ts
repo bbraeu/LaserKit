@@ -39,8 +39,8 @@ test("always says the kerf is the fit", async ({ page }) => {
     await expect(page.getByRole("tooltip")).toContainText("one kerf loose");
 });
 
-test("warns that no variation means no puzzle", async ({ page }) => {
-    await setNum(page, "Variation", 0);
+test("warns that no difficulty means no puzzle", async ({ page }) => {
+    await setNum(page, "Difficulty", 0);
     await page.getByTestId("statusbar").getByRole("button", { name: /notes?$/ }).hover();
     await expect(page.getByRole("tooltip")).toContainText("every piece fits every socket");
 });

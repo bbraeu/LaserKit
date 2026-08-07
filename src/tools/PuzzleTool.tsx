@@ -31,7 +31,7 @@ const DEFAULTS: PuzzleParams = {
     height: 150,
     cols: 6,
     rows: 5,
-    jitter: 0.6,
+    difficulty: 0.6,
     knob: 0.2,
     radius: 4,
     seed: 1,
@@ -43,25 +43,25 @@ const PRESETS: Preset<PuzzleParams>[] = [
         id: "child",
         label: "For small hands",
         hint: "Twelve big pieces on an A5-ish board",
-        patch: { width: 200, height: 150, cols: 4, rows: 3, knob: 0.22, jitter: 0.6 }
+        patch: { width: 200, height: 150, cols: 4, rows: 3, knob: 0.22, difficulty: 0.35 }
     },
     {
         id: "photo",
         label: "Photo puzzle",
         hint: "60 pieces, for a picture glued on before cutting",
-        patch: { width: 260, height: 200, cols: 10, rows: 6, knob: 0.2, jitter: 0.7 }
+        patch: { width: 260, height: 200, cols: 10, rows: 6, knob: 0.2, difficulty: 0.7 }
     },
     {
         id: "coaster",
         label: "Coaster set",
         hint: "Four square pieces that break apart",
-        patch: { width: 200, height: 200, cols: 2, rows: 2, knob: 0.18, jitter: 0.3, radius: 10 }
+        patch: { width: 200, height: 200, cols: 2, rows: 2, knob: 0.18, difficulty: 0.15, radius: 10 }
     },
     {
         id: "hard",
         label: "Unreasonable",
         hint: "300 pieces, and good luck",
-        patch: { width: 400, height: 300, cols: 20, rows: 15, knob: 0.2, jitter: 0.8 }
+        patch: { width: 400, height: 300, cols: 20, rows: 15, knob: 0.2, difficulty: 1 }
     }
 ];
 
@@ -114,7 +114,7 @@ export default function PuzzleTool() {
             legend={legend}
             stats={result ? [
                 { label: "Pieces", value: String(result.pieces) },
-                { label: "One piece", value: `${result.pieceW.toFixed(1)} × ${mm(result.pieceH)}` },
+                { label: "One piece", value: `${result.pieceW.toFixed(1)} × ${mm(result.pieceH)}`, hint: "On average. Above difficulty 0 the corners of the lattice wander, so no two pieces are quite the same size — which is most of what makes it hard." },
                 { label: "Board", value: `${result.width.toFixed(0)} × ${result.height.toFixed(0)} mm` },
                 { label: "Joints", value: String(result.joints.length), hint: "One line per shared edge. A piece and its neighbour share it, so cutting each piece's own outline would send the beam down every internal line twice — twice the job, and a joint burnt loose." },
                 { label: "Cut", value: `${(result.cutLength / 1000).toFixed(2)} m` }
@@ -168,15 +168,24 @@ export default function PuzzleTool() {
             {/* ── The bit that makes it a jigsaw ─────────────────────────── */}
             <PanelSection id="puzzle-knob" title="Pieces" icon={<PuzzleIcon className="size-3" />}>
                 <SliderField
-                    label="Variation"
-                    hint="How far each knob wanders along its edge. At 0 every piece is the same shape, so every piece fits every socket — a lovely object and a terrible puzzle. It never touches the neck: where a knob sits is jitter, how well it locks is not."
-                    value={p.jitter}
+                    label="Difficulty"
+                    hint="How different the pieces are from each other. It moves three things at once, and it takes all three: the corners of the lattice wander so the pieces are different sizes and the joints stop being straight, each knob slides along its own edge, and each knob is a different size. At 0 every piece fits every socket — a lovely object and a terrible puzzle. What it never touches is the neck: whether a knob locks is not negotiable."
+                    value={p.difficulty}
                     min={0}
                     max={1}
                     step={0.05}
                     unit=""
-                    onChange={n => params.set({ jitter: n }, { label: "Variation", coalesce: "jitter" })}
+                    onChange={n => params.set({ difficulty: n }, { label: "Difficulty", coalesce: "difficulty" })}
                 />
+                {result && (
+                    <p className="text-[11px] leading-relaxed text-subtle-foreground">
+                        {result.spread < 1.05
+                            ? "Every piece the same size."
+                            : <>The biggest piece is{" "}
+                                <span className="text-muted-foreground">{result.spread.toFixed(1)}×</span>{" "}
+                                the area of the smallest.</>}
+                    </p>
+                )}
                 <SliderField
                     label="Knob size"
                     hint="As a fraction of the shorter side of a piece, so a long thin piece never gets a knob taller than it is wide. Bigger knobs hold better and leave less of the piece that is not knob."
