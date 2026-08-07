@@ -38,6 +38,13 @@ export interface SidebarProps {
     tabNoun: string;
     onReplace: () => void;
     onClose: () => void;
+    /**
+     * False for a tool built out of numbers rather than a file. The whole
+     * Project block goes with it: there is no file to name, none to replace and
+     * none to close, and a generator's "document" is already named in the
+     * toolbar and measured in the status bar.
+     */
+    openable?: boolean;
     /** past, present and future as one list, newest last */
     history: HistoryEntry[];
     historyIndex: number;
@@ -65,6 +72,7 @@ export function Sidebar(props: SidebarProps) {
         >
             <div className="scroll-slim flex-1 overflow-y-auto overscroll-contain">
                 {/* ── the file ───────────────────────────────────────────── */}
+                {props.openable !== false && (
                 <PanelSection id="source" title="Project" icon={<File className="size-3" />}>
                     {bOpen ? (
                         <div className="space-y-2">
@@ -93,6 +101,7 @@ export function Sidebar(props: SidebarProps) {
                         </p>
                     )}
                 </PanelSection>
+                )}
 
                 {/* ── the pages of it ────────────────────────────────────── */}
                 {props.tabs.length > 1 && (

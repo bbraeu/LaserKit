@@ -81,6 +81,19 @@ export const TOOLS: ToolDef[] = [
         description: "Free in-browser text generator for laser cutting: set a word in any font installed on your machine, weld the letters into one plate, add a keyring hole and export DXF, Falcon Design Space (.fds) or SVG. No font upload needed, nothing leaves your browser."
     },
     {
+        id: "box",
+        slug: "box/",
+        label: "Box generator",
+        short: "Box",
+        hint: "size → finger-jointed box",
+        blurb: "Type three numbers and get the flat panels of a finger-jointed box — lid or no lid, hinged or lay-on, compartments inside, and the kerf already taken out of every tooth.",
+        // The one glyph that reads as "box" at 20 px: an isometric cube.
+        icon: "m21 7.5-9-5.25L3 7.5m18 0-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9",
+        accepts: "nothing — it starts from numbers",
+        title: "Laser-cut box generator — finger-jointed, with lid and dividers | LaserKit",
+        description: "Free in-browser box generator for laser cutting: finger-jointed boxes at any size, measured inside or outside, with a lay-on, tray, hinged or closed lid, an inset floor, cross-lapped dividers and kerf compensation on every joint. Exports SVG, DXF and Falcon Design Space (.fds)."
+    },
+    {
         // Renamed to the job it does. /invert/ is still a page — a redirect to
         // here — so links from before the rename keep working.
         id: "stamp",

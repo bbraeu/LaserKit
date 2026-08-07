@@ -56,6 +56,8 @@ export interface StageProps {
     empty: boolean;
     busy: boolean;
     accept: string;
+    /** false when the tool takes no file — no drop target, no "drop to open" */
+    openable?: boolean;
     onOpenFile: (file: File) => void;
     emptyTitle: string;
     emptySub: string;
@@ -195,24 +197,29 @@ export function Stage(props: StageProps) {
         if (file) props.onOpenFile(file);
     };
 
-    const pad = prefs.rulers ? RULER_PX : 0;
+    const pad = prefs.rulers ? RULER_PX : 0,
+        bOpenable = props.openable !== false;
 
     return (
         <section
             aria-label="Canvas"
             className={cn("relative min-w-0 bg-background", props.className)}
-            onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-            onDragLeave={e => { if (e.currentTarget === e.target) setDragOver(false); }}
-            onDrop={e => { e.preventDefault(); setDragOver(false); takeFile(e.dataTransfer.files?.[0]); }}
+            {...(bOpenable ? {
+                onDragOver: (e: React.DragEvent) => { e.preventDefault(); setDragOver(true); },
+                onDragLeave: (e: React.DragEvent) => { if (e.currentTarget === e.target) setDragOver(false); },
+                onDrop: (e: React.DragEvent) => { e.preventDefault(); setDragOver(false); takeFile(e.dataTransfer.files?.[0]); }
+            } : {})}
         >
-            <input
-                ref={fileRef}
-                type="file"
-                accept={props.accept}
-                className="hidden"
-                data-testid="stage-file-input"
-                onChange={e => { takeFile(e.target.files?.[0]); e.target.value = ""; }}
-            />
+            {bOpenable && (
+                <input
+                    ref={fileRef}
+                    type="file"
+                    accept={props.accept}
+                    className="hidden"
+                    data-testid="stage-file-input"
+                    onChange={e => { takeFile(e.target.files?.[0]); e.target.value = ""; }}
+                />
+            )}
 
             {/* ── rulers ─────────────────────────────────────────────────── */}
             {prefs.rulers && !props.empty && (

@@ -41,6 +41,8 @@ export interface ToolbarProps {
     /** the canvas being shown, when the file holds more than one */
     documentSuffix?: string;
     accept: string;
+    /** false for a tool that makes its drawing out of numbers, not out of a file */
+    openable?: boolean;
     onOpenFile: (file: File) => void;
     onNew: () => void;
     canNew: boolean;
@@ -135,11 +137,13 @@ export function Toolbar(props: ToolbarProps) {
                     <FilePlus2 className="size-4" />
                 </Button>
             </Hint>
-            <Hint label={<>Open a file <span className="text-subtle-foreground">{oTool.accepts}</span></>}>
-                <Button variant="ghost" size="icon" onClick={() => inputRef.current?.click()} aria-label="Open">
-                    <FolderOpen className="size-4" />
-                </Button>
-            </Hint>
+            {props.openable !== false && (
+                <Hint label={<>Open a file <span className="text-subtle-foreground">{oTool.accepts}</span></>}>
+                    <Button variant="ghost" size="icon" onClick={() => inputRef.current?.click()} aria-label="Open">
+                        <FolderOpen className="size-4" />
+                    </Button>
+                </Hint>
+            )}
 
             <Separator orientation="vertical" className="mx-1 h-5" />
 

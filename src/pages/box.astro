@@ -1,0 +1,188 @@
+---
+import ToolPage from "../components/ToolPage.astro";
+import BoxTool from "../tools/BoxTool";
+---
+
+<ToolPage tool="box">
+    <Fragment slot="lead">
+        Three numbers in, a sheet of panels out. Every edge is a finger joint worked out from the
+        <strong class="text-slate-300">actual thickness</strong> of your material, with the
+        <strong class="text-slate-300">kerf</strong> already taken off every tooth and added to every notch — so the
+        parts tap together square instead of arriving 0.3 mm loose. Lid or no lid, hinged or lay-on, compartments
+        inside, and a floor that can sit on the ground or stand on a plinth.
+    </Fragment>
+
+    <BoxTool client:only="react">
+        <div slot="fallback" class="flex h-[100dvh] flex-col bg-[#08090d]">
+            <div class="h-12 shrink-0 border-b border-white/7"></div>
+            <div class="flex min-h-0 flex-1">
+                <div class="hidden w-60 shrink-0 border-r border-white/7 xl:block"></div>
+                <div class="flex-1"></div>
+                <div class="hidden w-76 shrink-0 border-l border-white/7 xl:block"></div>
+            </div>
+            <div class="h-7 shrink-0 border-t border-white/7"></div>
+        </div>
+    </BoxTool>
+
+    <section slot="notes" class="relative px-4 pb-24">
+        <div class="mx-auto w-[min(72rem,100%)]">
+            <div class="grid gap-5 lg:grid-cols-3">
+                <article class="glass reveal rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">The kerf is the whole game</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        A laser does not cut along a line, it burns a slot about 0.15 mm wide centred on it. So a
+                        finger cut to size comes out a beam narrower and its socket a beam wider: 0.3 mm of slop in
+                        every joint, which is the difference between a box you tap together with a mallet and one that
+                        falls apart until it is glued and clamped. Here every finger is drawn half a kerf oversize and
+                        every notch half a kerf under, so both come out the size they were meant to be. To measure
+                        yours, cut a 20 mm square and measure it — what is missing is the kerf.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 110ms">
+                    <h2 class="text-lg font-semibold text-white">Measure your sheet</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Every joint is cut exactly as deep as the thickness you type, which makes it the one number
+                        here that has to be right. "3 mm" plywood is routinely 2.7 or 3.2, and a box drawn for 3.0 in
+                        stock that is 3.2 will not go together at all. Put callipers on the actual sheet, not on the
+                        label. The rest of the box follows from it: the fingers default to three times the thickness,
+                        which is the width that is strong enough to knock together and short enough not to snap.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 220ms">
+                    <h2 class="text-lg font-semibold text-white">Inside or outside</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        A box that has to fit a shelf is described from the outside; a box that has to fit its contents
+                        is described from the inside. Both are one toggle, and the panel shows you the other figure as
+                        you drag — so you never have to add up wall thicknesses in your head, and never discover at the
+                        end that six millimetres of it were plywood.
+                    </p>
+                </article>
+            </div>
+
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">Five answers to "does it have a lid?"</h2>
+                <dl class="mt-4 grid gap-4 text-sm leading-relaxed sm:grid-cols-2 lg:grid-cols-3">
+                    <div>
+                        <dt class="font-semibold text-slate-200">No lid</dt>
+                        <dd class="mt-1 text-slate-400">
+                            Four walls and a floor. A tray, a drawer insert, a planter, a parts bin.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Lay-on</dt>
+                        <dd class="mt-1 text-slate-400">
+                            A plate the size of the box that rests on the rim. On its own it is a tile that slides off,
+                            so a second plate — the size of the opening less 0.1 mm on every side — is glued centred
+                            underneath and drops into it. Its position is engraved on the lid so it can be glued
+                            square.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Tray</dt>
+                        <dd class="mt-1 text-slate-400">
+                            A shallow open box that slips over the outside of this one, the way a shoe box does. Cut
+                            with the same joints and the same play, so it slides rather than binds.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Hinged</dt>
+                        <dd class="mt-1 text-slate-400">
+                            A clamshell: base and lid are two halves of one outline, so the grain runs on through the
+                            joint. See below for why the pivot is where it is.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Closed</dt>
+                        <dd class="mt-1 text-slate-400">
+                            A sixth panel finger-jointed on exactly like the floor. It never opens again — which is
+                            what an enclosure, a die or a sealed housing actually wants.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Inset floor</dt>
+                        <dd class="mt-1 text-slate-400">
+                            Separately from the lid: the floor can sit at the very bottom of the walls, or be raised so
+                            the walls carry on below it as a plinth. Raised, it passes <em>through</em> the walls on
+                            visible through-tenons — somewhere to hide a cable, or four feet to stand on.
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">Why the hinge pin hangs in the air</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    Put a pivot anywhere inside the back wall and the lid's back corner swings <em>down</em> into the
+                    box as the front lifts. Every laser-cut flip-top solves that by cutting a clearance arc out of the
+                    rim — which is why they all have a notch behind the hinge and why the lid rocks in it.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    There is one family of positions where the problem does not arise: <strong class="text-slate-300">behind the back face and above the rim</strong>. From there every point of the lid lies down-and-forward of
+                    the pin, so opening it lifts all of them at once. Nothing has to be cut away, and nothing fouls.
+                    The catch is that no part of the box reaches that point — it is in mid-air. So the lid's own side
+                    walls grow a round knuckle out to it, and a pair of ears screwed to the outside of the box's side
+                    walls meet them there. Two plates in two planes with one pin through both: a strap hinge, and the
+                    only kind that opens a full quarter turn without a single clearance cut.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    Use a length of 3 mm rod, or an M3 screw with a nut on the far side. The ears' mounting holes are
+                    already drilled through the box's side walls to match.
+                </p>
+            </div>
+
+            <div class="grid gap-5 lg:grid-cols-2">
+                <div class="glass reveal mt-5 rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">Compartments that lift out</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Dividers cross-lap into each other — slots down from the top on one set, up from the bottom on
+                        the other — so a grid of them assembles into one piece and drops into the finished box. They
+                        are cut to the space inside less the play on each side, and nothing is glued: pull the grid
+                        out, cut a different one, and the box is a different sorter.
+                    </p>
+                </div>
+                <div class="glass reveal mt-5 rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">Nested for your bed</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        The panels are packed into rows no wider than the sheet width you set, so what you export is
+                        ready to cut rather than something to rearrange first. A part too big for the sheet widens the
+                        layout instead of vanishing off it, and the status bar says which. The names on the canvas are
+                        a view toggle — they are never cut.
+                    </p>
+                </div>
+            </div>
+
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">What each format does with it</h2>
+                <dl class="mt-3 grid gap-4 text-sm leading-relaxed sm:grid-cols-3">
+                    <div>
+                        <dt class="font-semibold text-slate-200">SVG</dt>
+                        <dd class="mt-1 text-slate-400">
+                            Every outline in cutting red, at true size in millimetres, with the glue positions in
+                            engraving green.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">DXF</dt>
+                        <dd class="mt-1 text-slate-400">
+                            Closed polylines colour-coded by operation, which is how LightBurn and every CAM tool
+                            groups a job. No curves to reinterpret: the arcs are already flattened to 0.01 mm.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Falcon Design Space</dt>
+                        <dd class="mt-1 text-slate-400">
+                            A native project with the cut and engrave layers already assigned, so it opens ready to
+                            run.
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+
+            <p class="reveal mt-5 text-xs leading-relaxed text-slate-500">
+                Before you commit a whole sheet: cut one corner of one joint — a 30 mm square off the front wall and
+                the piece of side wall that meets it — and check the fit. Kerf varies with power, speed, focus and how
+                damp the plywood is, and two minutes here saves a box.
+            </p>
+        </div>
+    </section>
+</ToolPage>

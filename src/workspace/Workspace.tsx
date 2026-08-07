@@ -60,6 +60,13 @@ export interface WorkspaceProps {
      * inspector that empties itself would lock the tool.
      */
     inspectorEmpty?: boolean;
+    /**
+     * Whether this tool takes a file at all. The box generator does not: it
+     * makes its drawing out of numbers. An Open button that opens nothing and a
+     * "Drop to open" overlay over a stage that accepts nothing are both
+     * controls that lie, so they are left out rather than disabled.
+     */
+    openable?: boolean;
     busy: boolean;
     error: string | null;
     onOpenFile: (file: File) => void;
@@ -166,23 +173,26 @@ export function Workspace(props: WorkspaceProps) {
                 data-testid="workspace"
                 className="relative flex h-[100dvh] flex-col overflow-hidden bg-background text-foreground"
             >
-                <input
-                    ref={openInputRef}
-                    type="file"
-                    accept={oTool.accepts}
-                    className="hidden"
-                    onChange={e => {
-                        const f = e.target.files?.[0];
-                        if (f) props.onOpenFile(f);
-                        e.target.value = "";
-                    }}
-                />
+                {props.openable !== false && (
+                    <input
+                        ref={openInputRef}
+                        type="file"
+                        accept={oTool.accepts}
+                        className="hidden"
+                        onChange={e => {
+                            const f = e.target.files?.[0];
+                            if (f) props.onOpenFile(f);
+                            e.target.value = "";
+                        }}
+                    />
+                )}
 
                 <Toolbar
                     toolId={props.toolId}
                     documentName={props.documentName}
                     documentSuffix={props.tabs.length > 1 ? props.tabs[props.tab]?.label : undefined}
                     accept={oTool.accepts}
+                    openable={props.openable ?? true}
                     onOpenFile={props.onOpenFile}
                     onNew={() => { props.onClose(); props.params.reset(); }}
                     canNew={!props.empty}
@@ -215,6 +225,7 @@ export function Workspace(props: WorkspaceProps) {
                         tabNoun={props.tabNoun ?? "Canvas"}
                         onReplace={() => openInputRef.current?.click()}
                         onClose={props.onClose}
+                        openable={props.openable ?? true}
                         history={props.params.history}
                         historyIndex={props.params.historyIndex}
                         onHistoryJump={props.params.jumpTo}
@@ -228,6 +239,7 @@ export function Workspace(props: WorkspaceProps) {
                             empty={props.empty}
                             busy={props.busy}
                             accept={oTool.accepts}
+                            openable={props.openable ?? true}
                             onOpenFile={props.onOpenFile}
                             emptyTitle={props.emptyTitle ?? `Drop ${oTool.accepts} here`}
                             emptySub={props.emptySub ?? "or click to browse — everything runs in your browser, nothing is uploaded"}
