@@ -31,6 +31,24 @@ const size = async (page: import("@playwright/test").Page): Promise<[number, num
 // and samples the shape that was there a frame earlier. Every assertion about a
 // dimension therefore polls until the geometry has caught up.
 const pollWidth = (page: import("@playwright/test").Page) => expect.poll(async () => (await size(page))[0]);
+
+/**
+ * A status-bar figure, once it has stopped moving.
+ *
+ * Anything used as a *baseline* has to be read after the build that produced it
+ * finished, or the comparison is against a frame of some earlier state. Polling
+ * until two consecutive reads agree says that without guessing a sleep.
+ */
+const settledStat = async (page: import("@playwright/test").Page, label: string): Promise<string> => {
+    let last = "";
+    await expect.poll(async () => {
+        const now = await stat(page, label).innerText(),
+            same = now === last && now.length > label.length;
+        last = now;
+        return same;
+    }).toBe(true);
+    return last;
+};
 const pollHeight = (page: import("@playwright/test").Page) => expect.poll(async () => (await size(page))[1]);
 
 test.describe("text generator", () => {
@@ -182,16 +200,18 @@ test.describe("text generator", () => {
 
     test("engraves the seam where letters lap over each other", async ({ page }) => {
         await setText(page, "Wave");
+        await settledStat(page, "Size");
+        const [w0] = await size(page);
+
         // Tight enough that the letters genuinely run into each other — the
         // union then has no boundary between them left to read.
-        const [w0] = await size(page);
         const sp = page.getByLabel("Letters, exact value");
         await sp.fill("-8");
         await sp.blur();
         // Waited for against the width it *had*, not a number that would have to
         // be re-guessed whenever the runner's default sans changes.
         await pollWidth(page).toBeLessThan(w0 - 10);
-        const before = await stat(page, "Points").innerText();
+        const before = await settledStat(page, "Points");
 
         await page.getByRole("switch", { name: "Engrave where letters overlap" }).click();
         // The legend only names the colour once there is really a seam on the
@@ -205,9 +225,15 @@ test.describe("text generator", () => {
     test("says so when the switch is on but nothing overlaps", async ({ page }) => {
         // Letters well apart: the switch is on, and honest about having nothing
         // to draw rather than claiming a colour that is not there.
+        const [w0] = await size(page);
         const sp = page.getByLabel("Letters, exact value");
         await sp.fill("4");
         await sp.blur();
+        // Toggled only once the wider spacing has been built. Clicking straight
+        // away turns the seams on for the *old* spacing, where "LaserKit" does
+        // have a pair of letters touching — which is what made this flaky.
+        await pollWidth(page).toBeGreaterThan(w0 + 10);
+
         await page.getByRole("switch", { name: "Engrave where letters overlap" }).click();
         await expect(page.getByTestId("inspector")).toContainText("Nothing overlaps yet");
         await expect(legend(page).getByText("letter edges")).toHaveCount(0);
