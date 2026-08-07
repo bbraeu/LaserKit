@@ -1,9 +1,9 @@
 import {
-    MIN_RING_AREA, boxInside, boxOverlaps, dedupe, inRing, pathData, r3,
-    readDesignFile, ringArea, ringBounds, ringPathData, scaleSubpaths, subBounds
+    MIN_RING_AREA, boxInside, boxOverlaps, dedupe, ellipseRing, inRing, pathData, r3,
+    readDesignFile, rectRing, ringArea, ringBounds, ringPathData, scaleSubpaths, shiftRing, subBounds
 } from "./design";
 import type { Box, DesignDoc } from "./design";
-import { FLATTEN_TOLERANCE, OPERATION_COLORS, buildDxf } from "./dxf";
+import { OPERATION_COLORS, buildDxf } from "./dxf";
 import type { DxfEntity, Point, Subpath } from "./dxf";
 import { buildFds } from "./fds";
 
@@ -38,9 +38,6 @@ const CUT = OPERATION_COLORS.VECTOR_CUTTING!;
 /** Line width of an exported cut path, in mm. */
 const EXPORT_STROKE = 0.3;
 
-/** Corner arcs and ellipses are flattened to the same tolerance as the input. */
-const ARC_TOLERANCE = FLATTEN_TOLERANCE;
-
 /** Above this many segment pairs the shapes-overlap check gives up (a warning only). */
 const CROSS_BUDGET = 4e6;
 
@@ -52,6 +49,14 @@ export type MirrorAxis = "none" | "h" | "v";
 
 export interface InvertOptions {
     frame: FrameShape;
+    /**
+     * The finished stamp's size in mm, or null to let the design decide it.
+     *
+     * Given one, the plate is exactly that big and the design is scaled to sit
+     * inside it with the margin still around it — because "a 40 × 15 mm stamp"
+     * is a thing you order, while "a design plus 3 mm" is not.
+     */
+    size: { w: number; h: number } | null;
     /** millimetres of plate around the design on every side */
     margin: number;
     /** corner radius in mm — rectangular plates only */
@@ -66,6 +71,8 @@ export interface InvertOptions {
 export interface InvertResult {
     /** the plate's edge, origin at 0,0 — the outer ring of the inverted figure */
     frame: Point[];
+    /** the same edge as parameters, so the stamp kit can regrow it at another size */
+    spec: FrameSpec;
     /** the design's rings in the same coordinates: the parts left standing */
     aRing: Point[][];
     /** plate size in mm */
@@ -95,63 +102,92 @@ export const readInvertFile = (file: File): Promise<{ name: string; aDoc: Design
 // The plate
 // ---------------------------------------------------------------------------
 
-/** Segments a circular arc of `sweep` radians needs to stay within tolerance. */
-const arcSegments = (r: number, sweep: number): number =>
-    r <= ARC_TOLERANCE
-        ? 2
-        : Math.max(2, Math.ceil(Math.abs(sweep) / (2 * Math.acos(Math.max(0, 1 - ARC_TOLERANCE / r)))));
+/**
+ * The plate written out as the handful of numbers that define it, rather than as
+ * the ring they were turned into. The stamp kit needs the very same plate a few
+ * millimetres larger, and growing a rectangle or an ellipse by its parameters is
+ * exact where offsetting its polygon would not be.
+ */
+export type FrameSpec =
+    | { shape: "rect"; box: Box; radius: number }
+    | { shape: "round"; cx: number; cy: number; rx: number; ry: number };
 
-/** A rectangle with optional rounded corners, clockwise from the top-left. */
-const rectRing = (b: Box, radius: number): Point[] => {
-    const w = b.x1 - b.x0,
-        h = b.y1 - b.y0,
-        r = Math.max(0, Math.min(radius, Math.min(w, h) / 2));
+export const frameRing = (o: FrameSpec): Point[] =>
+    o.shape === "rect" ? rectRing(o.box, o.radius) : ellipseRing(o.cx, o.cy, o.rx, o.ry);
 
-    if (r < 1e-6) {
-        return [{ x: b.x0, y: b.y0 }, { x: b.x1, y: b.y0 }, { x: b.x1, y: b.y1 }, { x: b.x0, y: b.y1 }];
-    }
-
-    const segs = arcSegments(r, Math.PI / 2),
-        out: Point[] = [],
-        // Centre of each corner arc, with the angle its sweep starts at.
-        aCorner: [number, number, number][] = [
-            [b.x1 - r, b.y0 + r, -Math.PI / 2], // top-right
-            [b.x1 - r, b.y1 - r, 0],            // bottom-right
-            [b.x0 + r, b.y1 - r, Math.PI / 2],  // bottom-left
-            [b.x0 + r, b.y0 + r, Math.PI]       // top-left
-        ];
-
-    for (const [cx, cy, a0] of aCorner) {
-        for (let i = 0; i <= segs; i++) {
-            const a = a0 + (Math.PI / 2) * (i / segs);
-            out.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
+/**
+ * The same plate, d mm further out on every side.
+ *
+ * A sharp corner offsets to a sharp corner; a rounded one keeps its arc centre,
+ * so its radius grows with the offset. An ellipse's true offset is not an ellipse
+ * — its semi-axes are grown instead, which is exact at the four axis points and
+ * within a few percent of d in between.
+ */
+export const growFrame = (o: FrameSpec, d: number): FrameSpec =>
+    o.shape === "rect"
+        ? {
+            shape: "rect",
+            box: { x0: o.box.x0 - d, y0: o.box.y0 - d, x1: o.box.x1 + d, y1: o.box.y1 + d },
+            radius: o.radius > 0 ? Math.max(0, o.radius + d) : 0
         }
-    }
-    return dedupe(out);
-};
+        : { shape: "round", cx: o.cx, cy: o.cy, rx: o.rx + d, ry: o.ry + d };
 
-/** An ellipse, clockwise. */
-const ellipseRing = (cx: number, cy: number, rx: number, ry: number): Point[] => {
-    const segs = arcSegments(Math.max(rx, ry), 2 * Math.PI),
-        out: Point[] = [];
-    for (let i = 0; i < segs; i++) {
-        const a = (2 * Math.PI * i) / segs;
-        out.push({ x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) });
-    }
-    return out;
-};
+/** Centre of the plate — where a handle belongs. */
+export const frameCentre = (o: FrameSpec): Point =>
+    o.shape === "rect"
+        ? { x: (o.box.x0 + o.box.x1) / 2, y: (o.box.y0 + o.box.y1) / 2 }
+        : { x: o.cx, y: o.cy };
+
+const shiftFrame = (o: FrameSpec, dx: number, dy: number): FrameSpec =>
+    o.shape === "rect"
+        ? { ...o, box: { x0: o.box.x0 + dx, y0: o.box.y0 + dy, x1: o.box.x1 + dx, y1: o.box.y1 + dy } }
+        : { ...o, cx: o.cx + dx, cy: o.cy + dy };
 
 interface Frame {
+    spec: FrameSpec;
     ring: Point[];
     /** is the point on or inside the plate? Closed form, so it is cheap per point. */
     holds: (p: Point) => boolean;
 }
 
 /**
+ * How much the design has to grow or shrink to sit inside a plate of the asked-for
+ * size with the margin still around it — the inverse of the plate constructions
+ * below, so a size taken straight off the current plate comes back as exactly 1
+ * and nothing moves when the field is first filled in.
+ *
+ * An axis the design has no extent on constrains nothing, and a plate with no
+ * room left inside the margin is caught by the caller.
+ */
+const fitScale = (bDesign: Box, o: InvertOptions): number => {
+    if (!o.size) return 1;
+    const m = Math.max(0, o.margin),
+        hw = (bDesign.x1 - bDesign.x0) / 2,
+        hh = (bDesign.y1 - bDesign.y0) / 2,
+        ax = o.size.w / 2,
+        ay = o.size.h / 2;
+
+    if (o.frame === "circle") {
+        const d = Math.hypot(hw, hh);
+        return d > 0 ? (Math.min(ax, ay) - m) / d : 1;
+    }
+    // The rectangle holds the box outright; the ellipse only passes through its
+    // corners at √2 times its half-sides.
+    const f = o.frame === "rect" ? 1 : Math.SQRT2,
+        a = hw > 0 ? (ax - m) / (hw * f) : Infinity,
+        b = hh > 0 ? (ay - m) / (hh * f) : Infinity,
+        k = Math.min(a, b);
+    return isFinite(k) ? k : 1;
+};
+
+/**
  * The plate around a design. A rectangle is the design's bounding box grown by
  * the margin; an ellipse has to circumscribe that box, so its semi-axes are the
  * box's half-sides times √2 — the smallest ellipse of the same proportions that
  * still contains every corner.
+ *
+ * With a size asked for, all of that is skipped: the plate is exactly that big,
+ * centred on the design, which `fitScale` has already sized to fit.
  */
 const buildFrame = (bDesign: Box, o: InvertOptions): Frame => {
     const m = Math.max(0, o.margin),
@@ -161,7 +197,9 @@ const buildFrame = (bDesign: Box, o: InvertOptions): Frame => {
         hh = (bDesign.y1 - bDesign.y0) / 2;
 
     if (o.frame === "rect") {
-        const box: Box = { x0: bDesign.x0 - m, y0: bDesign.y0 - m, x1: bDesign.x1 + m, y1: bDesign.y1 + m },
+        const box: Box = o.size
+            ? { x0: cx - o.size.w / 2, y0: cy - o.size.h / 2, x1: cx + o.size.w / 2, y1: cy + o.size.h / 2 }
+            : { x0: bDesign.x0 - m, y0: bDesign.y0 - m, x1: bDesign.x1 + m, y1: bDesign.y1 + m },
             r = Math.max(0, Math.min(o.radius, Math.min(box.x1 - box.x0, box.y1 - box.y0) / 2)),
             // Distance from the box's inner corner rectangle — zero inside it,
             // so the test collapses to the plain box when r is 0.
@@ -170,6 +208,9 @@ const buildFrame = (bDesign: Box, o: InvertOptions): Frame => {
             fcx = (box.x0 + box.x1) / 2,
             fcy = (box.y0 + box.y1) / 2;
         return {
+            // The clamped radius, not the one asked for: the kit has to grow the
+            // plate that was actually drawn.
+            spec: { shape: "rect", box, radius: r },
             ring: rectRing(box, r),
             holds: p => {
                 const dx = Math.abs(p.x - fcx),
@@ -184,12 +225,14 @@ const buildFrame = (bDesign: Box, o: InvertOptions): Frame => {
 
     // An ellipse of the box's own proportions passes through all four corners at
     // exactly √2 times its half-sides; a circle has to reach the corner outright,
-    // which is the box's half-diagonal.
-    const rCircle = Math.hypot(hw, hh) + m,
-        ax = o.frame === "circle" ? rCircle : hw * Math.SQRT2 + m,
-        ay = o.frame === "circle" ? rCircle : hh * Math.SQRT2 + m;
+    // which is the box's half-diagonal. A circle asked for a size takes the
+    // smaller of the two, so it stays a circle whatever was typed.
+    const rCircle = o.size ? Math.min(o.size.w, o.size.h) / 2 : Math.hypot(hw, hh) + m,
+        ax = o.frame === "circle" ? rCircle : o.size ? o.size.w / 2 : hw * Math.SQRT2 + m,
+        ay = o.frame === "circle" ? rCircle : o.size ? o.size.h / 2 : hh * Math.SQRT2 + m;
 
     return {
+        spec: { shape: "round", cx, cy, rx: ax, ry: ay },
         ring: ellipseRing(cx, cy, ax, ay),
         holds: p => ((p.x - cx) / ax) ** 2 + ((p.y - cy) / ay) ** 2 <= 1 + 1e-9
     };
@@ -308,17 +351,32 @@ const mirrorRing = (a: Point[], axis: MirrorAxis, cx: number, cy: number): Point
         ? a
         : a.map(p => (axis === "h" ? { x: 2 * cx - p.x, y: p.y } : { x: p.x, y: 2 * cy - p.y }));
 
-const shiftRing = (a: Point[], dx: number, dy: number): Point[] =>
-    a.map(p => ({ x: p.x - dx, y: p.y - dy }));
-
 export const buildInvert = (doc: DesignDoc, o: InvertOptions): InvertResult => {
     const aSub = scaleSubpaths(doc.aSub, o.scale > 0 ? o.scale : 1),
         { aRing: aDesign, warnings } = buildRings(aSub),
         aWarnings = [...doc.warnings, ...warnings];
 
+    // A stamp asked for a size resizes the artwork, not the plate: the rings are
+    // scaled about their own centre, which is where the plate is then built. Done
+    // here rather than through `scale` because the fit is measured on the rings
+    // the plate is drawn around, not on every stray subpath in the file.
+    const bNatural = ringBounds(aDesign.map(r => r.pts)),
+        k = fitScale(bNatural, o);
+    if (!(k > 0)) {
+        throw new Error("This stamp size leaves no room inside the margin — make it larger, or lower the margin.");
+    }
+    if (k !== 1) {
+        const ccx = (bNatural.x0 + bNatural.x1) / 2,
+            ccy = (bNatural.y0 + bNatural.y1) / 2;
+        for (const r of aDesign) {
+            r.pts = r.pts.map(p => ({ x: ccx + (p.x - ccx) * k, y: ccy + (p.y - ccy) * k }));
+            r.area *= k * k;
+        }
+    }
+
     // Mirroring about the design's own centre leaves the bounding box — and so
     // the plate — exactly where it was.
-    const bDesign = ringBounds(aDesign.map(r => r.pts)),
+    const bDesign = k === 1 ? bNatural : ringBounds(aDesign.map(r => r.pts)),
         mcx = (bDesign.x0 + bDesign.x1) / 2,
         mcy = (bDesign.y0 + bDesign.y1) / 2,
         oFrame = buildFrame(bDesign, o),
@@ -345,9 +403,10 @@ export const buildInvert = (doc: DesignDoc, o: InvertOptions): InvertResult => {
     const
         // Exported with the plate's own corner as the origin, so the file is
         // exactly as big as the piece.
-        frame = shiftRing(oFrame.ring, bFrame.x0, bFrame.y0),
+        frame = shiftRing(oFrame.ring, -bFrame.x0, -bFrame.y0),
+        spec = shiftFrame(oFrame.spec, -bFrame.x0, -bFrame.y0),
         aRing = aDesign.map(r =>
-            shiftRing(mirrorRing(r.pts, o.mirror, mcx, mcy), bFrame.x0, bFrame.y0)
+            shiftRing(mirrorRing(r.pts, o.mirror, mcx, mcy), -bFrame.x0, -bFrame.y0)
         ),
         fFrame = ringArea(frame),
         engraved = fFrame > 0 ? Math.max(0, Math.min(1, (fFrame - fDesign) / fFrame)) : 0;
@@ -360,6 +419,7 @@ export const buildInvert = (doc: DesignDoc, o: InvertOptions): InvertResult => {
 
     return {
         frame,
+        spec,
         aRing,
         width,
         height,

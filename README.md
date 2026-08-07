@@ -27,13 +27,38 @@ there plus a page that names it.
 | `/convert/` | **xTool project converter** | `.xcs` / `.xs` → DXF · FDS · SVG |
 | `/contour/` | **Outer contour tracer** | `.svg` / `.xcs` / `.xs` → cut line |
 | `/trace/` | **Trace an image** | `.png` / `.jpg` / `.gif` / `.bmp` / `.webp` → vectors |
-| `/invert/` | **Invert a design** | `.svg` / `.xcs` / `.xs` → negative |
+| `/stamp/` | **Stamp creator** | `.svg` / `.xcs` / `.xs` → stamp |
 
-The converter, contour tracer and inverter all read a dropped file through the
+`/invert/`, where the stamp creator lived while it was called *Invert a design*,
+is kept as a redirect page — a static host cannot answer with a 301, so it
+carries a canonical link, a meta refresh and a `location.replace()`.
+
+The converter, contour tracer and stamp creator all read a dropped file through the
 same `src/lib/design.ts` — one `DesignDoc` per canvas, geometry in millimetres
 with curves already flattened — so every tool works on exactly what would be cut.
 The image tracer starts from pixels instead, and joins the others at the point
 where geometry becomes a DXF, an `.fds` or an SVG.
+
+### Passing work between tools
+
+The tools chain in real work — trace a logo into vectors, *then* make a stamp of
+it — so **Send to other tool** hands the current result straight to the next tool
+instead of routing it through the download folder. The sender puts its own SVG
+output into `sessionStorage` and navigates; the receiver picks it up on load and
+feeds it to the very same reader a dropped file goes through, showing *handed over
+from …* next to the file name (`src/lib/handoff.ts`, `src/components/SendTo.tsx`).
+
+It sits in its own row directly under the preview, closed off by a rule, and is
+styled as a quiet cyan link with an arrow rather than as a button — it saves
+nothing and navigates. The controls that *do* write a file all carry a tray arrow
+and stay together in the panel header, out of its way.
+
+The payload is always an SVG in millimetres, which is what every tool that takes
+a design already reads, so the receiving end needs to know nothing about where it
+came from. Anything that produces geometry can send (converter, image tracer,
+contour tracer, stamp creator); the two tools that take a design can receive
+(`HANDOFF_TARGETS`). It is consumed on read, so a reload starts from the drop
+zone rather than silently re-importing.
 
 ## Input formats
 
@@ -41,7 +66,7 @@ where geometry becomes a DXF, an `.fds` or an SVG.
 | --- | --- | --- |
 | **.xcs** | xTool Creative Space | plain JSON project file |
 | **.xs** | xTool Studio | ZIP archive (`xcs-workspace-v2`) holding the same model split into parts |
-| **.svg** | anything | contour tracer and inverter only; read at 96 dpi when it states no physical size |
+| **.svg** | anything | contour tracer and stamp creator only; read at 96 dpi when it states no physical size |
 | **.png / .jpg / .gif / .bmp / .webp** | anything | image tracer only; pixels, read at 96 dpi unless a width is given |
 
 ## Output formats
@@ -89,7 +114,7 @@ original on top of.
 - Two exports: the cut line alone, or the cut line in red together with the traced
   design in black.
 
-## Invert
+## Stamp creator
 
 Swaps filled and empty: every area the design covers comes out untouched, and
 everything around it comes out engraved away — so the artwork stands proud of the
@@ -109,6 +134,12 @@ inlays and any "engrave the background" job.
   of that box, or a circle reaching its far corner. Whether the artwork actually
   fits inside a rounded or elliptical plate is asked point by point, in closed
   form, and said out loud when it does not.
+- **Or name the size** — *Set the stamp size* turns it around: the plate is
+  exactly the millimetres you type and the design is scaled to fit inside it,
+  margin and proportions kept, because "a 40 × 15 mm stamp" is a thing you order
+  while "a design plus 3 mm" is not. `fitScale()` is the closed-form inverse of
+  each of the three plate constructions, so a size taken off the current plate
+  comes back as exactly 1 and ticking the box moves nothing.
 - **Mirroring** flips the design about its own centre, leaving the plate where it
   was — a stamp prints back-to-front, so it has to be engraved that way.
 - **Overlaps are checked for.** Alternating fill is the design's own meaning only
@@ -119,6 +150,14 @@ inlays and any "engrave the background" job.
   the fix: union them first.
 - Optionally repeats the plate's edge in cutting red, so one file both engraves the
   background and frees the piece from the sheet.
+- **The parts around the stamp** (`Download base stamp objects`, `src/lib/stamp.ts`)
+  come off the plate's own parameters, so a round stamp gives true circles and a
+  rounded rectangle keeps its corner radius — exactly, at any size. One SVG sheet
+  in millimetres, cut lines red and the handle's glue position in engraving green:
+  a **base plate** the size of the whole stamp with a ⌀ 15 mm circle engraved at
+  its centre, **five ⌀ 15 mm discs** that stack into the handle, a **cap lid** 2 mm
+  larger all round, and **two rings** of that outer size with a 1 mm wall — glued
+  under the lid they make a cap the stamp slides into with 1 mm of play.
 
 ## Trace
 
@@ -212,8 +251,8 @@ versions store just the numeric id from their online catalogue, so `Material
   curve fitting. Split into `prepareTrace` and `buildTrace` so that dragging Glätte
   or Optimieren re-fits curves to an already-decomposed bitmap instead of
   re-thresholding two million pixels.
-- **Invert** (`src/lib/invert.ts`): ring nesting depth, a closed-form plate, and
-  one even-odd path. DXF has no fills, so every ring goes out as a closed contour
+- **Stamp** (`src/lib/invert.ts`, `src/lib/stamp.ts`): ring nesting depth, a
+  closed-form plate, and one even-odd path. DXF has no fills, so every ring goes out as a closed contour
   in the engraving colour and the alternation is left to the laser software —
   which is how LightBurn, Falcon and xTool fill nested contours anyway; an `.fds`
   shape is a QPainterPath, whose default rule is odd-even.

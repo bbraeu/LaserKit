@@ -28,11 +28,26 @@ export type FormatKey = keyof typeof FORMATS;
 
 export const FORMAT_KEYS = Object.keys(FORMATS) as FormatKey[];
 
+/**
+ * The tray-arrow every control that writes a file to disk carries — so "this
+ * saves something" is legible before the label is read, and the one control that
+ * merely moves you to another tool (see SendTo) cannot be mistaken for one.
+ */
+export function DownloadIcon({ className = "size-4" }: { className?: string }) {
+    return (
+        <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+        </svg>
+    );
+}
+
 export interface FormatMenuProps {
     /** the format the main button acts on — not always the one selected, see `blocked` */
     active: FormatKey;
-    /** label of the main button, usually the file name it will write */
+    /** label of the main button — short, since it sits beside other controls */
     label: string;
+    /** the file it will write, for the tooltip: too long to put on the button */
+    title?: string;
     onDownload: (fmt: FormatKey) => void;
     /** why a format cannot be used here; undefined = it can */
     blocked?: (fmt: FormatKey) => string | undefined;
@@ -41,7 +56,7 @@ export interface FormatMenuProps {
     disabled?: boolean;
 }
 
-export function FormatMenu({ active, label, onDownload, blocked, blockedNote, disabled }: FormatMenuProps) {
+export function FormatMenu({ active, label, title, onDownload, blocked, blockedNote, disabled }: FormatMenuProps) {
     const [open, setOpen] = useState(false);
     const ref = useRef<HTMLDivElement>(null);
 
@@ -68,8 +83,10 @@ export function FormatMenu({ active, label, onDownload, blocked, blockedNote, di
                 <button
                     onClick={() => onDownload(active)}
                     disabled={disabled}
-                    className="rounded-l-lg bg-linear-to-r from-cyan-500 to-violet-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                    title={title}
+                    className="flex items-center gap-2 rounded-l-lg bg-linear-to-r from-cyan-500 to-violet-500 px-5 py-2.5 text-sm font-semibold text-white transition hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
                 >
+                    <DownloadIcon />
                     {label}
                 </button>
                 <button

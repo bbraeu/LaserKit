@@ -18,8 +18,10 @@ const isProd = import.meta.env.PROD;
 // entirely (no script is loaded). Tracked events: convert_file, DXF_Download,
 // FDS_Download, SVG_Download, download_zip, convert_laser, outline_file,
 // OUTLINE_Download, OUTLINE_DESIGN_Download, invert_file, INVERT_DXF_Download,
-// INVERT_FDS_Download, INVERT_SVG_Download, trace_file, TRACE_DXF_Download,
-// TRACE_FDS_Download, TRACE_SVG_Download — see trackEvent() in lib/util.ts.
+// INVERT_FDS_Download, INVERT_SVG_Download, STAMP_PARTS_Download,
+// trace_file, TRACE_DXF_Download,
+// TRACE_FDS_Download, TRACE_SVG_Download, SEND_<from>_to_<to> — see
+// trackEvent() in lib/util.ts.
 // Uses Google Consent Mode v2 (advanced): gtag.js always loads with all
 // consent defaults denied; the banner decision is applied via consent update.
 const GA_MEASUREMENT_ID = "G-79BWTBS409";

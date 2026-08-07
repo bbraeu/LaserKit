@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { buildOutline, hitItem, readOutlineFile, BORDER_COLOR, CUT_COLOR, ITEM_COLOR, MUTED_COLOR } from "../lib/outline";
 import type { ConnectMode, OutlineDoc, OutlineResult } from "../lib/outline";
+import { handoffFile, takeHandoff } from "../lib/handoff";
+import { getTool } from "../lib/tools";
 import { downloadBlob, trackEvent } from "../lib/util";
 import { DropZone } from "./DropZone";
+import { DownloadIcon } from "./FormatMenu";
 import { FIELD_CLASS, NumberField } from "./NumberField";
 import { usePanZoom, ZoomControls, PanHint } from "./PanZoom";
+import { SendTo } from "./SendTo";
 
 /** Range of the border, in mm — the slider's ends and what the field accepts. */
 const BORDER_MIN = -25;
@@ -51,6 +55,8 @@ export default function Outliner() {
     const [result, setResult] = useState<OutlineResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    /** the tool this design was handed over from, if it did not come off disk */
+    const [from, setFrom] = useState<string | null>(null);
     // What the preview is refitted for. Set together with the result rather than
     // derived from the controls: a new width reaches this component a render before
     // the geometry it rescales, and refitting to the outgoing drawing then leaves
@@ -81,6 +87,15 @@ export default function Outliner() {
             setBusy(false);
         }
     }, []);
+
+    // A design handed over by another tool arrives through the same reader a
+    // dropped file does — it is only the drop that is skipped.
+    useEffect(() => {
+        const o = takeHandoff();
+        if (!o) return;
+        setFrom(o.from);
+        void openFile(handoffFile(o));
+    }, [openFile]);
 
     const oDoc = aDoc?.[tab];
 
@@ -171,26 +186,38 @@ export default function Outliner() {
             {aDoc && (
                 <div className="glass mt-8 overflow-hidden rounded-2xl">
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
-                        <p className="truncate text-sm text-slate-300">
-                            <span className="mr-2 inline-block size-2 rounded-full bg-emerald-400 align-middle" aria-hidden="true" />
-                            {name}
+                        {/* Left: what is loaded, and where it can go next. Right: files out. */}
+                        {/* The header is for what is loaded and the files it writes;
+                            carrying the design on lives in the strip at the bottom. */}
+                        <p className="min-w-0 text-sm text-slate-300">
+                            <span className="truncate">
+                                <span className="mr-2 inline-block size-2 rounded-full bg-emerald-400 align-middle" aria-hidden="true" />
+                                {name}
+                            </span>
+                            {from && (
+                                <span className="block pl-4 text-xs text-slate-500">
+                                    handed over from {getTool(from).label}
+                                </span>
+                            )}
                         </p>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <button
-                                onClick={() => download(false)}
-                                disabled={!result?.svg}
-                                title={fileName}
-                                className="rounded-lg bg-linear-to-r from-cyan-500 to-violet-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                                Download outline
-                            </button>
+                        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
                             <button
                                 onClick={() => download(true)}
                                 disabled={!result?.svgWithDesign}
                                 title={`${fileNameBoth} — the cut line in red plus the traced design in black, in one file`}
-                                className="rounded-lg border border-white/15 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                                className="flex items-center gap-2 rounded-lg border border-white/15 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                             >
+                                <DownloadIcon />
                                 Download outline + design
+                            </button>
+                            <button
+                                onClick={() => download(false)}
+                                disabled={!result?.svg}
+                                title={fileName}
+                                className="flex items-center gap-2 rounded-lg bg-linear-to-r from-cyan-500 to-violet-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-violet-500/25 transition hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                <DownloadIcon />
+                                Download outline
                             </button>
                         </div>
                     </div>
@@ -314,6 +341,14 @@ export default function Outliner() {
                             <ZoomControls zoomBy={zoomBy} resetView={resetView} />
                             <PanHint />
                         </div>
+
+                        {/* Straight under the workbench: hand this design to the next tool */}
+                        <SendTo
+                            from="contour"
+                            name={`${baseName}_outline`}
+                            svg={() => result?.svg ?? ""}
+                            disabled={!result?.svg}
+                        />
 
                         {result && oDoc && (
                             <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">

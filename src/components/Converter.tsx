@@ -8,10 +8,11 @@ import { LASERS, getLaser, detectLaser, convertSetting } from "../lib/lasers";
 import { downloadBlob, downloadAsZip, trackEvent } from "../lib/util";
 import { isXsArchive, parseXs } from "../lib/xs";
 import { DropZone } from "./DropZone";
-import { FORMATS, FormatMenu } from "./FormatMenu";
+import { DownloadIcon, FORMATS, FormatMenu } from "./FormatMenu";
 import { FIELD_CLASS } from "./NumberField";
 import type { FormatKey } from "./FormatMenu";
 import { usePanZoom, ZoomControls, PanHint } from "./PanZoom";
+import { SendTo } from "./SendTo";
 
 interface CanvasResult {
     title: string;
@@ -362,8 +363,9 @@ export default function Converter() {
                         {state.canvases.length > 1 && (
                             <button
                                 onClick={downloadAll}
-                                className="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-cyan-400/50 hover:text-white"
+                                className="flex items-center gap-2 rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-cyan-400/50 hover:text-white"
                             >
+                                <DownloadIcon />
                                 Download all as .zip ({FORMATS[zipFormat].label})
                             </button>
                         )}
@@ -401,15 +403,18 @@ export default function Converter() {
                                         </li>
                                     ))}
                                 </ul>
-                                <FormatMenu
-                                    active={activeFormat}
-                                    label={`Download ${fileNameFor(active, activeFormat)}`}
-                                    onDownload={fmt => { setFormat(fmt); downloadOne(active, fmt); }}
-                                    blocked={fmt => activeHasRaster && !carriesRaster(fmt)
-                                        ? "Cannot store the image on this canvas — vector geometry only"
-                                        : undefined}
-                                    blockedNote="no image support"
-                                />
+                                <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                                    <FormatMenu
+                                        active={activeFormat}
+                                        label={`Download .${FORMATS[activeFormat].ext}`}
+                                        title={`Saves ${fileNameFor(active, activeFormat)}`}
+                                        onDownload={fmt => { setFormat(fmt); downloadOne(active, fmt); }}
+                                        blocked={fmt => activeHasRaster && !carriesRaster(fmt)
+                                            ? "Cannot store the image on this canvas — vector geometry only"
+                                            : undefined}
+                                        blockedNote="no image support"
+                                    />
+                                </div>
                             </div>
 
                             {/* SVG preview with pan & zoom */}
@@ -422,6 +427,14 @@ export default function Converter() {
                                 <ZoomControls zoomBy={zoomBy} resetView={resetView} />
                                 <PanHint />
                             </div>
+
+                            {/* Straight under the workbench: this canvas, into the tool
+                                that works on it next */}
+                            <SendTo
+                                from="convert"
+                                name={fileNameFor(active, "svg").replace(/\.svg$/i, "")}
+                                svg={() => active.svg}
+                            />
 
                             {active.rasters > 0 && (
                                 <p className="mt-3 text-xs text-amber-300/80">

@@ -1,5 +1,6 @@
 import { getCanvasGeometry, getLocalGeometry } from "./convert";
 import type { XcsProject } from "./convert";
+import { FLATTEN_TOLERANCE } from "./dxf";
 import type { Point, Subpath } from "./dxf";
 import { isXsArchive, parseXs } from "./xs";
 
@@ -115,6 +116,65 @@ export const deStair = (aPts: Point[]): Point[] => {
         return { x: (a.x + b.x + c.x) / 3, y: (a.y + b.y + c.y) / 3 };
     });
 };
+
+// ---------------------------------------------------------------------------
+// Primitives — rectangles, circles and ellipses as rings
+//
+// Flattened to the same tolerance the curve flattener works at, so a generated
+// shape is no coarser than one that came out of a design file.
+// ---------------------------------------------------------------------------
+
+/** Segments a circular arc of `sweep` radians needs to stay within tolerance. */
+export const arcSegments = (r: number, sweep: number): number =>
+    r <= FLATTEN_TOLERANCE
+        ? 2
+        : Math.max(2, Math.ceil(Math.abs(sweep) / (2 * Math.acos(Math.max(0, 1 - FLATTEN_TOLERANCE / r)))));
+
+/** A rectangle with optional rounded corners, clockwise from the top-left. */
+export const rectRing = (b: Box, radius: number): Point[] => {
+    const w = b.x1 - b.x0,
+        h = b.y1 - b.y0,
+        r = Math.max(0, Math.min(radius, Math.min(w, h) / 2));
+
+    if (r < 1e-6) {
+        return [{ x: b.x0, y: b.y0 }, { x: b.x1, y: b.y0 }, { x: b.x1, y: b.y1 }, { x: b.x0, y: b.y1 }];
+    }
+
+    const segs = arcSegments(r, Math.PI / 2),
+        out: Point[] = [],
+        // Centre of each corner arc, with the angle its sweep starts at.
+        aCorner: [number, number, number][] = [
+            [b.x1 - r, b.y0 + r, -Math.PI / 2], // top-right
+            [b.x1 - r, b.y1 - r, 0],            // bottom-right
+            [b.x0 + r, b.y1 - r, Math.PI / 2],  // bottom-left
+            [b.x0 + r, b.y0 + r, Math.PI]       // top-left
+        ];
+
+    for (const [cx, cy, a0] of aCorner) {
+        for (let i = 0; i <= segs; i++) {
+            const a = a0 + (Math.PI / 2) * (i / segs);
+            out.push({ x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) });
+        }
+    }
+    return dedupe(out);
+};
+
+/** An ellipse, clockwise. */
+export const ellipseRing = (cx: number, cy: number, rx: number, ry: number): Point[] => {
+    const segs = arcSegments(Math.max(rx, ry), 2 * Math.PI),
+        out: Point[] = [];
+    for (let i = 0; i < segs; i++) {
+        const a = (2 * Math.PI * i) / segs;
+        out.push({ x: cx + rx * Math.cos(a), y: cy + ry * Math.sin(a) });
+    }
+    return out;
+};
+
+export const circleRing = (cx: number, cy: number, r: number): Point[] => ellipseRing(cx, cy, r, r);
+
+/** The same ring somewhere else. */
+export const shiftRing = (a: Point[], dx: number, dy: number): Point[] =>
+    a.map(p => ({ x: p.x + dx, y: p.y + dy }));
 
 export const distToSegment = (p: Point, a: Point, b: Point): number => {
     const vx = b.x - a.x,

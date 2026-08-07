@@ -68,18 +68,20 @@ export const TOOLS: ToolDef[] = [
         description: "Free in-browser image tracer: turn a PNG, JPEG or scan into vector paths with live threshold, smooth and optimize sliders. Outline or centreline, exported as SVG, DXF or Falcon Design Space."
     },
     {
-        id: "invert",
-        slug: "invert/",
-        label: "Invert a design",
-        short: "Invert",
-        hint: ".svg / .xcs / .xs → negative",
-        blurb: "Swap filled and empty: the laser removes the background and leaves your artwork standing proud. What a rubber stamp needs — mirroring included.",
+        // Renamed to the job it does. /invert/ is still a page — a redirect to
+        // here — so links from before the rename keep working.
+        id: "stamp",
+        slug: "stamp/",
+        label: "Stamp creator",
+        short: "Stamp",
+        hint: ".svg / .xcs / .xs → stamp",
+        blurb: "Turn a design into a rubber stamp: the laser removes the background and leaves your artwork standing proud — mirroring included, and the mount, handle and cap cut to match.",
         // The universal invert glyph: a circle with one half solid.
         icon: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
         iconFill: "M12 3a9 9 0 0 1 0 18Z",
         accepts: ".svg, .xcs, .xs",
-        title: "Invert a vector design — negative & stamp maker | LaserKit",
-        description: "Free in-browser tool that inverts a vector design: every filled area comes out empty and every empty area filled, on a rectangular, elliptical or round plate. Exactly what engraving a rubber stamp needs, with mirroring built in. Exports DXF, Falcon Design Space (.fds) and SVG."
+        title: "Stamp creator — turn a design into a laser-cut rubber stamp | LaserKit",
+        description: "Free in-browser stamp maker: invert a vector design so every filled area comes out empty and every empty area filled, on a rectangular, elliptical or round plate, mirrored ready to print. Downloads the base plate, handle discs and cap to go with it. Exports DXF, Falcon Design Space (.fds) and SVG."
     }
 ];
 

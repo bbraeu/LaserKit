@@ -10,6 +10,7 @@ import { FIELD_CLASS, NumberField } from "./NumberField";
 import { FORMATS, FormatMenu } from "./FormatMenu";
 import type { FormatKey } from "./FormatMenu";
 import { usePanZoom, ZoomControls, PanHint } from "./PanZoom";
+import { SendTo } from "./SendTo";
 
 /** How faint the source image sits behind the traced vectors. */
 const FADE_OPACITY = 0.28;
@@ -180,16 +181,19 @@ export default function Tracer() {
             {image && (
                 <div className="glass mt-8 overflow-hidden rounded-2xl">
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
-                        <p className="truncate text-sm text-slate-300">
+                        <p className="min-w-0 truncate text-sm text-slate-300">
                             <span className="mr-2 inline-block size-2 rounded-full bg-emerald-400 align-middle" aria-hidden="true" />
                             {file?.name} · {image.sourceWidth}×{image.sourceHeight} px
                         </p>
-                        <FormatMenu
-                            active={format}
-                            label={`Download ${fileName(format)}`}
-                            disabled={!result}
-                            onDownload={fmt => void download(fmt)}
-                        />
+                        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                            <FormatMenu
+                                active={format}
+                                label={`Download .${FORMATS[format].ext}`}
+                                title={`Saves ${fileName(format)} — the traced vectors`}
+                                disabled={!result}
+                                onDownload={fmt => void download(fmt)}
+                            />
+                        </div>
                     </div>
 
                     <div className="p-5">
@@ -244,6 +248,15 @@ export default function Tracer() {
                             <ZoomControls zoomBy={zoomBy} resetView={resetView} />
                             <PanHint />
                         </div>
+
+                        {/* Straight under the workbench: traced vectors are exactly
+                            what the design tools take next */}
+                        <SendTo
+                            from="trace"
+                            name={baseName}
+                            svg={() => (result ? traceToSvg(result) : "")}
+                            disabled={!result}
+                        />
 
                         {result && (
                             <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">

@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     buildInvert, invertToDxf, invertToFds, invertToSvg, readInvertFile
 } from "../lib/invert";
 import type { FrameShape, InvertResult, MirrorAxis } from "../lib/invert";
+import { buildStampKit } from "../lib/stamp";
 import type { DesignDoc } from "../lib/design";
+import { handoffFile, takeHandoff } from "../lib/handoff";
+import { getTool } from "../lib/tools";
 import { downloadBlob, trackEvent } from "../lib/util";
 import { DropZone } from "./DropZone";
+import { SendTo } from "./SendTo";
 import { FIELD_CLASS, NumberField } from "./NumberField";
-import { FORMATS, FormatMenu } from "./FormatMenu";
+import { DownloadIcon, FORMATS, FormatMenu } from "./FormatMenu";
 import type { FormatKey } from "./FormatMenu";
 import { usePanZoom, ZoomControls, PanHint } from "./PanZoom";
 
@@ -43,11 +47,16 @@ const MIRRORS: { id: MirrorAxis; label: string }[] = [
 
 const mm = (n: number): string => `${n.toFixed(1)} mm`;
 
+/** Sizes are typed in tenths of a millimetre; nothing here is finer than that. */
+const r1 = (n: number): number => Math.round(n * 10) / 10;
+
 export default function Inverter() {
     const [name, setName] = useState("");
     const [aDoc, setDocs] = useState<DesignDoc[] | null>(null);
     const [tab, setTab] = useState(0);
     const [frame, setFrame] = useState<FrameShape>("rect");
+    // null = the design decides the plate, which is where everyone starts
+    const [size, setSize] = useState<{ w: number; h: number } | null>(null);
     const [margin, setMargin] = useState(3);
     const [radius, setRadius] = useState(0);
     const [mirror, setMirror] = useState<MirrorAxis>("none");
@@ -57,6 +66,8 @@ export default function Inverter() {
     const [result, setResult] = useState<InvertResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    /** the tool this design was handed over from, if it did not come off disk */
+    const [from, setFrom] = useState<string | null>(null);
     // What the preview is refitted for. Set together with the result rather than
     // derived from the controls: the controls change a render earlier than the
     // drawing they produce, and refitting to the outgoing drawing then leaves the
@@ -73,6 +84,9 @@ export default function Inverter() {
             setDocs(o.aDoc);
             setTab(0);
             setWidth(undefined);
+            // A new design has its own size; keeping the last one's would silently
+            // rescale it to something the user never asked for.
+            setSize(null);
             trackEvent("invert_file");
         } catch (e) {
             setDocs(null);
@@ -84,6 +98,15 @@ export default function Inverter() {
         }
     }, []);
 
+    // A design handed over by another tool arrives through the same reader a
+    // dropped file does — it is only the drop that is skipped.
+    useEffect(() => {
+        const o = takeHandoff();
+        if (!o) return;
+        setFrom(o.from);
+        void openFile(handoffFile(o));
+    }, [openFile]);
+
     const oDoc = aDoc?.[tab];
 
     // Re-invert on every change. The short delay keeps dragging a slider from
@@ -94,6 +117,7 @@ export default function Inverter() {
             try {
                 setResult(buildInvert(oDoc, {
                     frame,
+                    size,
                     margin,
                     radius,
                     mirror,
@@ -104,7 +128,7 @@ export default function Inverter() {
                 // and a very different size — a circle around a wide design is more
                 // than twice as tall as the rectangle was. The margin deliberately
                 // does not appear here: nudging it must leave the view alone.
-                setFitKey(`${name}|${tab}|${width ?? ""}|${frame}`);
+                setFitKey(`${name}|${tab}|${width ?? ""}|${frame}|${size ? "sized" : ""}`);
                 setError(null);
             } catch (e) {
                 setResult(null);
@@ -112,12 +136,23 @@ export default function Inverter() {
             }
         }, 30);
         return () => clearTimeout(id);
-    }, [oDoc, frame, margin, radius, mirror, cut, width, name, tab]);
+    }, [oDoc, frame, size, margin, radius, mirror, cut, width, name, tab]);
 
     const { ref: previewRef, zoomBy, resetView } = usePanZoom(result?.preview, fitKey);
 
-    const baseName = `${name}${aDoc && aDoc.length > 1 && oDoc ? "_" + oDoc.title.replaceAll(" ", "_") : ""}_inverted`,
+    // The parts around the stamp follow from the plate alone, so they are worked
+    // out with it — cheap geometry, and it lets the summary sit under the button.
+    const kit = useMemo(() => (result ? buildStampKit(result.spec) : null), [result]);
+
+    const stem = `${name}${aDoc && aDoc.length > 1 && oDoc ? "_" + oDoc.title.replaceAll(" ", "_") : ""}`,
+        baseName = `${stem}_inverted`,
         fileName = (fmt: FormatKey): string => `${baseName}.${FORMATS[fmt].ext}`;
+
+    const downloadKit = (): void => {
+        if (!kit) return;
+        downloadBlob(new Blob([kit.svg], { type: "image/svg+xml" }), `${stem}_stamp_parts.svg`);
+        trackEvent("STAMP_PARTS_Download");
+    };
 
     const download = async (fmt: FormatKey): Promise<void> => {
         if (!result) return;
@@ -154,16 +189,37 @@ export default function Inverter() {
             {aDoc && (
                 <div className="glass mt-8 overflow-hidden rounded-2xl">
                     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
-                        <p className="truncate text-sm text-slate-300">
-                            <span className="mr-2 inline-block size-2 rounded-full bg-emerald-400 align-middle" aria-hidden="true" />
-                            {name}
+                        {/* The header is for what is loaded and the files it writes;
+                            carrying the design on lives in the strip at the bottom. */}
+                        <p className="min-w-0 text-sm text-slate-300">
+                            <span className="truncate">
+                                <span className="mr-2 inline-block size-2 rounded-full bg-emerald-400 align-middle" aria-hidden="true" />
+                                {name}
+                            </span>
+                            {from && (
+                                <span className="block pl-4 text-xs text-slate-500">
+                                    handed over from {getTool(from).label}
+                                </span>
+                            )}
                         </p>
-                        <FormatMenu
-                            active={format}
-                            label={`Download ${fileName(format)}`}
-                            disabled={!result}
-                            onDownload={fmt => void download(fmt)}
-                        />
+                        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                            <button
+                                onClick={downloadKit}
+                                disabled={!kit}
+                                title="Saves the base plate, handle discs and cap that turn this into a stamp you can hold — one SVG sheet"
+                                className="flex items-center gap-2 rounded-lg border border-white/15 px-4 py-2.5 text-sm font-medium text-slate-200 transition hover:border-cyan-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                <DownloadIcon />
+                                Download base stamp objects
+                            </button>
+                            <FormatMenu
+                                active={format}
+                                label={`Download .${FORMATS[format].ext}`}
+                                title={`Saves ${fileName(format)} — the inverted stamp face`}
+                                disabled={!result}
+                                onDownload={fmt => void download(fmt)}
+                            />
+                        </div>
                     </div>
 
                     {/* Canvas tabs — an .xcs project can hold several */}
@@ -241,10 +297,18 @@ export default function Inverter() {
                             <PanHint />
                         </div>
 
+                        {/* Straight under the workbench: hand this design to the next tool */}
+                        <SendTo
+                            from="stamp"
+                            name={`${stem}_inverted`}
+                            svg={() => invertToSvg(result!)}
+                            disabled={!result}
+                        />
+
                         {result && (
                             <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
                                 {[
-                                    { label: "Plate size", value: `${mm(result.width)} × ${mm(result.height)}` },
+                                    { label: "Stamp size", value: `${mm(result.width)} × ${mm(result.height)}` },
                                     { label: "Shapes kept", value: String(result.shapes) },
                                     { label: "Engraved area", value: `${Math.round(result.engraved * 100)} %` },
                                     { label: "Path points", value: String(result.points) }
@@ -263,6 +327,56 @@ export default function Inverter() {
 
                         {/* Controls */}
                         <div className="mt-5 grid gap-5 border-t border-white/10 pt-5 sm:grid-cols-2">
+                            {/* How big the finished stamp is: the design's own size plus a
+                                margin, or a size you name and the design fits into. */}
+                            <div>
+                                <label className="flex items-start gap-2.5 text-sm">
+                                    <input
+                                        type="checkbox"
+                                        checked={!!size}
+                                        disabled={!result}
+                                        onChange={e => setSize(e.target.checked && result
+                                            ? { w: r1(result.width), h: r1(result.height) }
+                                            : null)}
+                                        className="mt-0.5 size-4 accent-cyan-400"
+                                    />
+                                    <span className="font-medium text-white">Set the stamp size</span>
+                                </label>
+                                {size ? (
+                                    <>
+                                        <span className="mt-2 flex items-center gap-2">
+                                            <NumberField
+                                                label={frame === "circle" ? "Stamp diameter in millimetres" : "Stamp width in millimetres"}
+                                                value={size.w}
+                                                min={1}
+                                                unit={frame === "circle" ? "mm ⌀" : ""}
+                                                onChange={n => setSize(s => ({ w: n, h: frame === "circle" ? n : s?.h ?? n }))}
+                                            />
+                                            {frame !== "circle" && (
+                                                <>
+                                                    <span className="text-xs text-slate-500">×</span>
+                                                    <NumberField
+                                                        label="Stamp height in millimetres"
+                                                        value={size.h}
+                                                        min={1}
+                                                        onChange={n => setSize(s => ({ w: s?.w ?? n, h: n }))}
+                                                    />
+                                                </>
+                                            )}
+                                        </span>
+                                        <span className="mt-1 block text-[11px] leading-snug text-slate-500">
+                                            The finished stamp comes out exactly this big and the design is scaled to fit
+                                            inside it, keeping the margin and its own proportions.
+                                        </span>
+                                    </>
+                                ) : (
+                                    <span className="mt-1 block text-[11px] leading-snug text-slate-500">
+                                        Off, the design decides: the plate is what the shape below makes of its bounding box.
+                                        Tick this to name the size instead — it starts from the {result ? mm(result.width) + " × " + mm(result.height) : "size"} it has now.
+                                    </span>
+                                )}
+                            </div>
+
                             <div>
                                 <div className="flex items-baseline justify-between gap-2">
                                     <label htmlFor="invert-margin" className="text-sm font-medium text-white">Margin</label>
@@ -285,7 +399,9 @@ export default function Inverter() {
                                     className="mt-2 w-full accent-cyan-400"
                                 />
                                 <span className="mt-1 block text-[11px] leading-snug text-slate-500">
-                                    How much plate stands around the design. {oFrame.hint}
+                                    {size
+                                        ? "The gap the design keeps from the plate's edge — with the size fixed, raising this shrinks the artwork rather than the plate."
+                                        : <>How much plate stands around the design. {oFrame.hint}</>}
                                 </span>
                             </div>
 
@@ -353,6 +469,30 @@ export default function Inverter() {
                                 </span>
                             </label>
                         </div>
+
+                        {/* The parts that make the engraved face a stamp you can hold */}
+                        {kit && (
+                            <div className="mt-5 border-t border-white/10 pt-5">
+                                <h3 className="text-sm font-medium text-white">Mount, handle and cap</h3>
+                                <p className="mt-1 text-[11px] leading-snug text-slate-500">
+                                    <span className="text-slate-400">Download base stamp objects</span> writes one sheet of parts cut to
+                                    this stamp's own outline — {mm(kit.width)} × {mm(kit.height)} of material. Cut them from plywood or
+                                    acrylic, then glue.
+                                </p>
+
+                                <ul className="mt-3 grid gap-1.5 sm:grid-cols-2">
+                                    {kit.aPart.map(o => (
+                                        <li key={o.label} className="text-[11px] leading-snug text-slate-500">
+                                            <span className="text-slate-300">{o.label}</span> — {o.note}
+                                        </li>
+                                    ))}
+                                </ul>
+
+                                {kit.warnings.map(s => (
+                                    <p key={s} className="mt-3 text-xs text-amber-300/80">{s}</p>
+                                ))}
+                            </div>
+                        )}
 
                         <p className="mt-5 text-[11px] leading-relaxed text-slate-500">
                             Inverting is exact geometry, not a re-traced picture: the plate is one more ring around the

@@ -18,7 +18,7 @@ const operations = [
 
 <Layout
     title="LaserKit — free in-browser tools for laser cutting & engraving"
-    description="Free browser tools for laser cutting: convert xTool Creative Space (.xcs) and xTool Studio (.xs) projects to DXF, Falcon Design Space (.fds) and SVG, trace the outer contour of a design into a cut line, and invert a design into a negative for stamps. Nothing is uploaded."
+    description="Free browser tools for laser cutting: convert xTool Creative Space (.xcs) and xTool Studio (.xs) projects to DXF, Falcon Design Space (.fds) and SVG, trace the outer contour of a design into a cut line, and turn a design into a rubber stamp with the mount, handle and cap to match. Nothing is uploaded."
 >
     <!-- ───────────────────────── Hero ───────────────────────── -->
     <section class="relative flex flex-col items-center justify-center px-4 pt-32 pb-14 text-center">
@@ -35,7 +35,7 @@ const operations = [
 
         <p class="reveal is-visible mt-6 max-w-2xl text-lg text-slate-400 sm:text-xl" style="--reveal-delay: 160ms">
             Small, sharp tools for the jobs your laser software makes hard — file conversion that keeps its
-            operations, a cut line traced around any design, and a true negative for stamps. Free, open source,
+            operations, a cut line traced around any design, and a whole rubber stamp. Free, open source,
             and your files never leave the browser.
         </p>
 
@@ -100,7 +100,13 @@ const operations = [
                 ))}
             </div>
 
-            <p class="reveal mx-auto mt-10 max-w-2xl text-center text-sm text-slate-500" style="--reveal-delay: 200ms">
+            <p class="reveal mx-auto mt-10 max-w-2xl text-center text-sm text-slate-400" style="--reveal-delay: 160ms">
+                They also hand work to each other: trace a logo, then
+                <strong class="text-slate-300">Send to other tool</strong> → the stamp creator, and the design goes
+                straight across without a download and a drag back in.
+            </p>
+
+            <p class="reveal mx-auto mt-4 max-w-2xl text-center text-sm text-slate-500" style="--reveal-delay: 200ms">
                 DXF and SVG carry geometry and colours, not laser parameters — assign power &amp; speed per colour
                 once in your laser software. The .fds export pre-assigns the operation per layer; power &amp; speed
                 still come from your material settings. This is beta-grade software; heavily skewed shapes may not
@@ -121,7 +127,7 @@ const operations = [
                     <p class="text-sm font-bold tracking-widest text-cyan-300">MAINTAINED BY</p>
                     <h3 class="mt-3 text-xl font-semibold text-white">bbraeu</h3>
                     <p class="mt-2 text-sm leading-relaxed text-slate-400">
-                        DXF export engine, operation-type preservation, the contour tracer and the inverter.
+                        DXF export engine, operation-type preservation, the contour tracer and the stamp creator.
                     </p>
                     <a href="https://github.com/bbraeu" target="_blank" rel="noopener"
                        class="mt-5 inline-block rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-cyan-400/50 hover:text-white">
