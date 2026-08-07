@@ -94,6 +94,19 @@ export const TOOLS: ToolDef[] = [
         description: "Free in-browser box generator for laser cutting: finger-jointed boxes at any size, measured inside or outside, with a lay-on, tray, hinged or closed lid, an inset floor, cross-lapped dividers and kerf compensation on every joint. Exports SVG, DXF and Falcon Design Space (.fds)."
     },
     {
+        id: "mandala",
+        slug: "mandala/",
+        label: "Mandala & sunburst",
+        short: "Mandala",
+        hint: "symmetry → a disc of pattern",
+        blurb: "Radial patterns at any size and any symmetry — petals, drops, spokes or scallops — with the material left between them reported in millimetres, because that is what holds a cut one together.",
+        // A rosette: a hub with petals round it.
+        icon: "M12 3.75c1.5 2 1.5 4 0 6s-1.5 4 0 6 1.5 4 0 4.5M12 3.75c-1.5 2-1.5 4 0 6M20.25 12c-2 1.5-4 1.5-6 0s-4-1.5-6 0-4 1.5-4.5 0M20.25 12c-2-1.5-4-1.5-6 0M18 6a9 9 0 1 1-12 12A9 9 0 0 1 18 6Z",
+        accepts: "nothing — it starts from a symmetry",
+        title: "Mandala generator for laser cutting and engraving | LaserKit",
+        description: "Free in-browser mandala and sunburst generator for laser cutting: radial patterns at any diameter and symmetry with four motifs, concentric rings, a hub and a hanging hole — and the web between motifs measured in millimetres so a cut one does not fall apart. Exports SVG, DXF and Falcon Design Space (.fds)."
+    },
+    {
         id: "qr",
         slug: "qr/",
         label: "QR code",

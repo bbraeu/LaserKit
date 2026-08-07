@@ -30,6 +30,19 @@ export const REPO = "https://github.com/bbraeu/LaserKit";
 
 export const RELEASES: Release[] = [
     {
+        version: "3.10.0",
+        date: "2026-08-07",
+        title: "Mandalas and sunbursts",
+        tools: ["mandala"],
+        notes: [
+            "New tool. Radial patterns at any diameter and symmetry, in four motifs — petals, drops, spokes and scallops — with a mixed mode that picks a different one per ring from a seed.",
+            "Cut through, the pattern is the only structure, so the material left between motifs is computed and reported in millimetres. A mandala that will fall into forty petals on the bed looks exactly like one that will not.",
+            "A motif is never wider than the band it sits in is tall, whatever the symmetry. Without that rule a shallow ring gives shapes wider than they are long, and they read as lumps rather than petals.",
+            "Every other ring is turned half a slot, so the pattern reads as a weave instead of spokes running hub to rim — and it puts material where its neighbour has a hole.",
+            "Ring lines are always engraved, even on a cut mandala: cut, one would come away as a loose ring and take the pattern with it."
+        ]
+    },
+    {
         version: "3.9.0",
         date: "2026-08-07",
         title: "QR codes",

@@ -1,0 +1,102 @@
+---
+import ToolPage from "../components/ToolPage.astro";
+import MandalaTool from "../tools/MandalaTool";
+---
+
+<ToolPage tool="mandala">
+    <Fragment slot="lead">
+        Radial patterns at any size and any symmetry, in four motifs. Engrave them into a disc, or cut them clean
+        through for a suncatcher — in which case the number that matters is not how it looks but
+        <strong class="text-slate-300">how much material is left between the motifs</strong>, and that is measured for
+        you in millimetres.
+    </Fragment>
+
+    <MandalaTool client:only="react">
+        <div slot="fallback" class="flex h-[100dvh] flex-col bg-[#08090d]">
+            <div class="h-12 shrink-0 border-b border-white/7"></div>
+            <div class="flex min-h-0 flex-1">
+                <div class="hidden w-60 shrink-0 border-r border-white/7 xl:block"></div>
+                <div class="flex-1"></div>
+                <div class="hidden w-76 shrink-0 border-l border-white/7 xl:block"></div>
+            </div>
+            <div class="h-7 shrink-0 border-t border-white/7"></div>
+        </div>
+    </MandalaTool>
+
+    <section slot="notes" class="relative px-4 pb-24">
+        <div class="mx-auto w-[min(72rem,100%)]">
+            <div class="glass reveal rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">Cut, the pattern is the only structure</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    Engraved, a mandala cannot go wrong: it is a burn on a disc. Cut through, it is
+                    <em>holes</em> in a disc, and holes that meet each other separate the disc into pieces. A mandala
+                    that will fall into forty petals on the bed looks exactly like one that will not — same drawing,
+                    same colours, and no warning until you lift it.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    So two numbers are worked out from the parameters rather than left to be judged by eye: the
+                    <strong class="text-slate-300">web</strong> between one motif and the next at its widest point, and
+                    the material <strong class="text-slate-300">between rings</strong>. Those two are the whole
+                    structure; everything else is a hole. Under about 2 mm a cut disc is fragile in anything but
+                    plywood, and under 1 mm it is not a disc any more.
+                </p>
+            </div>
+
+            <div class="mt-5 grid gap-5 lg:grid-cols-4">
+                <article class="glass reveal rounded-2xl p-6">
+                    <h2 class="text-base font-semibold text-white">Petals</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        A lens: widest in the middle, pointed at both ends. The most flower-like of the four.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 80ms">
+                    <h2 class="text-base font-semibold text-white">Drops</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Narrow at the hub and round at the rim, like a flame. Reads as motion round the circle.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 160ms">
+                    <h2 class="text-base font-semibold text-white">Spokes</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Nearly parallel sides with rounded ends. The most open of the four, and the strongest when
+                        cut — this is the one for a suncatcher.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 240ms">
+                    <h2 class="text-base font-semibold text-white">Scallops</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Fat almost all the way out, so what is left between them is a thin rib. Handsome engraved and
+                        the first to break cut.
+                    </p>
+                </article>
+            </div>
+
+            <div class="grid gap-5 lg:grid-cols-2">
+                <div class="glass reveal mt-5 rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">Every ring is turned half a slot</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Rings whose motifs sat at the same angles would read as spokes running all the way from the hub
+                        to the rim, which is a wheel rather than a mandala. Every other ring is offset by half its
+                        slot, so the pattern reads as a weave — and it puts material where the neighbouring ring has a
+                        hole, which is also why a cut one holds.
+                    </p>
+                </div>
+                <div class="glass reveal mt-5 rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">Few controls, on purpose</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        There is no slider per ring. That would be more powerful and would produce worse mandalas: what
+                        makes one look deliberate is that everything in it follows from the same two or three
+                        decisions. Symmetry, rings and the web move the whole drawing at once, and the
+                        <em>mixed</em> motif picks a different shape per ring from a seed you can go back to.
+                    </p>
+                </div>
+            </div>
+
+            <p class="reveal mt-5 text-xs leading-relaxed text-slate-500">
+                Every dimension is a fraction of the diameter, so the pattern is the same shape at 40 mm and at 400 —
+                but the web is not, because it is a fraction of a circle that got smaller. A design that survives being
+                cut at 200 mm can fall apart at 80.
+            </p>
+        </div>
+    </section>
+</ToolPage>
