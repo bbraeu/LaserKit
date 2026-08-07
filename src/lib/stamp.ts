@@ -103,7 +103,7 @@ export const HANDLES: { id: HandleType; label: string; hint: string }[] = [
     {
         id: "arch",
         label: "Arch",
-        hint: "Two uprights glued on edge with a grip bar across them, so your fingers go under the handle. Its height is the upright’s own, so a thin sheet does not make a short handle."
+        hint: "Two uprights glued on edge with a grip bar across them, so your fingers go under the handle. Square-cut so they sit flush, marked on both the base plate and the bar, and its height is the upright's own — a thin sheet does not make a short handle."
     },
     {
         id: "none",
@@ -227,7 +227,13 @@ const buildHandle = (o: StampKitOptions, plate: { w: number; h: number }, centre
     }
 
     // Both remaining grips are a bar; the arch just stands it on two legs.
-    const barLen = size,
+    //
+    // For the arch the bar has to reach *past* them: its ends are half-rounds,
+    // so an upright glued at the very tip would have a curve under half its
+    // width and the glue mark would run off the part. One radius of overhang at
+    // each end puts the joint on the straight section, where it belongs.
+    const bOnLegs = o.handle === "arch",
+        barLen = bOnLegs ? size + BAR_DEPTH : size,
         barRing = (): Point[] => rectRing(boxAt(barLen, BAR_DEPTH), BAR_DEPTH / 2);
 
     if (o.handle === "bar") {
@@ -246,37 +252,55 @@ const buildHandle = (o: StampKitOptions, plate: { w: number; h: number }, centre
         };
     }
 
-    // Arch: two uprights on edge, a bar glued across their tops. Its height is
-    // the upright's own, so a thin sheet does not make a short handle.
+    // Arch: two uprights on edge, a bar glued across their tops.
+    //
+    // Square corners, not rounded: an upright is glued on its *edge*, so a
+    // radius there is a gap. It has to meet the base plate and the underside of
+    // the bar along its whole width or the joint rocks.
     const archH = clamp(o.height || UPRIGHT_HEIGHT, GRIP.minHeight, GRIP.maxHeight),
-        upright = (): Point[] => rectRing(boxAt(UPRIGHT_WIDTH, archH), 3),
-        // The uprights stand at the ends of the bar, one thickness in from each.
-        dx = barLen / 2 - o.thickness / 2,
-        legMark = (side: number): Point[] => rectRing({
-            x0: centre.x + side * dx - o.thickness / 2,
-            y0: centre.y - UPRIGHT_WIDTH / 2,
-            x1: centre.x + side * dx + o.thickness / 2,
-            y1: centre.y + UPRIGHT_WIDTH / 2
+        upright = (): Point[] => rectRing(boxAt(UPRIGHT_WIDTH, archH), 0),
+        // `size` is the span the arch straddles — the outer face of one upright
+        // to the outer face of the other. The bar is longer than that.
+        dx = size / 2 - o.thickness / 2,
+        // Where an upright's edge lands, as a rectangle of the sheet's own
+        // thickness. Drawn on both parts it touches — the base plate below and
+        // the grip bar above — because a mark on only one of them still leaves
+        // the second joint to be eyeballed.
+        legMark = (cx: number, cy: number, side: number): Point[] => rectRing({
+            x0: cx + side * dx - o.thickness / 2,
+            y0: cy - UPRIGHT_WIDTH / 2,
+            x1: cx + side * dx + o.thickness / 2,
+            y1: cy + UPRIGHT_WIDTH / 2
         }, 0);
 
     return {
         parts: [
             { label: "Upright 1", cut: [upright()], engrave: [] },
             { label: "Upright 2", cut: [upright()], engrave: [] },
-            { label: "Grip bar", cut: [barRing()], engrave: [] }
+            {
+                label: "Grip bar",
+                cut: [barRing()],
+                // In the bar's own coordinates: it is laid out from the origin,
+                // so its centre is half its size.
+                engrave: [
+                    legMark(barLen / 2, BAR_DEPTH / 2, -1),
+                    legMark(barLen / 2, BAR_DEPTH / 2, 1)
+                ]
+            }
         ],
-        mark: [legMark(-1), legMark(1)],
+        mark: [legMark(centre.x, centre.y, -1), legMark(centre.x, centre.y, 1)],
         height: archH + o.thickness,
         layers: 0,
+        // The bar overhangs the uprights, so it is the bar that has to fit.
         footprint: { w: barLen, h: UPRIGHT_WIDTH },
         aNote: [
             {
                 label: "Uprights ×2",
-                note: `${mm(UPRIGHT_WIDTH)} × ${mm(archH)}, glued on edge along the marks`
+                note: `${mm(UPRIGHT_WIDTH)} × ${mm(archH)}, square-cut, glued on edge along the marks`
             },
             {
                 label: "Grip bar ×1",
-                note: `${mm(barLen)} × ${mm(BAR_DEPTH)}, across their tops — ${mm(archH + o.thickness)} of clearance`
+                note: `${mm(barLen)} × ${mm(BAR_DEPTH)}, reaching ${mm(BAR_DEPTH / 2)} past each upright — marked on its underside, ${mm(archH + o.thickness)} of clearance`
             }
         ]
     };

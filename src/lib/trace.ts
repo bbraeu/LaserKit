@@ -21,8 +21,9 @@ import { buildFds } from "./fds";
 //   down its middle instead of a closed outline around it.
 //
 // The slider names and defaults are LightBurn's, which are potrace's parameters
-// under German labels: Ignoriere weniger als = turdsize, Glätte = alphamax,
-// Optimieren = opttolerance. The pipeline below follows the same published
+// under German labels: Ignoriere weniger als = turdsize, Glätte = alphamax
+// (Smooth here), Optimieren = opttolerance (Optimize). The pipeline below
+// follows the same published
 // approach — decompose the bitmap into nested boundaries, reduce each to a
 // polygon, then decide corner by corner whether to keep the corner or round it —
 // but it is written from that description rather than ported, so none of
@@ -756,7 +757,7 @@ export const buildTrace = (img: TraceImage, prep: TracePrep, o: TraceOptions): T
         height = img.height * k;
 
     if (aNode.length > MAX_SHOWN_POINTS) {
-        aWarnings.push(`${aNode.length} nodes — too many to draw them all, so the overlay shows none. Raise Optimieren to bring the count down.`);
+        aWarnings.push(`${aNode.length} nodes — too many to draw them all, so the overlay shows none. Raise Optimize to bring the count down.`);
     }
 
     return {

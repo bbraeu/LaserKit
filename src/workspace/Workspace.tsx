@@ -53,6 +53,13 @@ export interface WorkspaceProps {
     tabNoun?: string;
 
     empty: boolean;
+    /**
+     * Whether the *inspector* has nothing to describe. Defaults to `empty`,
+     * which is right for a tool that opens a file — but the text generator has
+     * no file, and its panel is the only way to put something on the stage. An
+     * inspector that empties itself would lock the tool.
+     */
+    inspectorEmpty?: boolean;
     busy: boolean;
     error: string | null;
     onOpenFile: (file: File) => void;
@@ -280,7 +287,7 @@ export function Workspace(props: WorkspaceProps) {
                         open={chrome.inspectorOpen}
                         subject={props.subject}
                         subtitle={props.subtitle}
-                        empty={props.empty}
+                        empty={props.inspectorEmpty ?? props.empty}
                         onReset={props.params.reset}
                         canReset={props.params.canUndo || props.params.canRedo}
                     >

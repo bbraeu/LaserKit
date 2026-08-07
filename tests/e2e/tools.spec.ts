@@ -157,6 +157,32 @@ test.describe("stamp creator", () => {
         await expect(panel).toContainText("⌀ 30 mm");
     });
 
+    test("moves the artwork inside the plate without moving the plate", async ({ page }) => {
+        // Both start centred, which is what "no offset" has to look like.
+        await expect(page.getByLabel("Move across, exact value")).toHaveValue("0");
+        await expect(page.getByLabel("Move down, exact value")).toHaveValue("0");
+
+        // Settled first, or the baseline is whatever the bar held mid-rebuild.
+        await expect(stat(page, "Size")).toContainText("50.0 mm × 32.1 mm");
+
+        const x = page.getByLabel("Move across, exact value");
+        await x.fill("4");
+        await x.blur();
+        await expect(page.getByRole("button", { name: "back to the middle" })).toBeVisible();
+        // The plate is unchanged; only the artwork inside it shifted.
+        await expect(stat(page, "Size")).toContainText("50.0 mm × 32.1 mm");
+
+        await page.getByRole("button", { name: "back to the middle" }).click();
+        await expect(page.getByLabel("Move across, exact value")).toHaveValue("0");
+    });
+
+    test("warns when the artwork has been pushed off the plate", async ({ page }) => {
+        const x = page.getByLabel("Move across, exact value");
+        await x.fill("40");
+        await x.blur();
+        await expect(page.getByTestId("statusbar")).toContainText(/\d note/);
+    });
+
     test("gives the arch an upright height the sheet does not bound", async ({ page }) => {
         await page.getByLabel("Type").click();
         await page.getByRole("option", { name: "Arch" }).click();
@@ -169,6 +195,19 @@ test.describe("stamp creator", () => {
         await h.blur();
         await expect(panel).toContainText("14 mm × 45 mm");
         await expect(panel).toContainText("48 mm of clearance");
+    });
+
+    test("reaches the grip bar past the uprights and marks both joints", async ({ page }) => {
+        await page.getByLabel("Type").click();
+        await page.getByRole("option", { name: "Arch" }).click();
+
+        const panel = page.getByTestId("bottom-panel");
+        // Square-cut, so an upright glued on edge meets its neighbour flush.
+        await expect(panel).toContainText("square-cut");
+        // The bar overhangs by one of its own radii at each end, or the joint
+        // would sit on the half-round and the glue mark would run off the part.
+        await expect(panel).toContainText("reaching 9 mm past each upright");
+        await expect(panel).toContainText("marked on its underside");
     });
 
     test("cuts no cap, whichever handle is picked", async ({ page }) => {
@@ -383,11 +422,15 @@ test.describe("xTool project converter", () => {
         await expect(page.getByTestId("toolbar")).toContainText("Canvas 2");
     });
 
-    test("keeps the operations apart and names them", async ({ page }) => {
-        const inspector = page.getByTestId("inspector");
-        await expect(inspector.locator("li", { hasText: "Line cutting" })).toBeVisible();
-        await expect(inspector.locator("li", { hasText: "Line engraving" })).toBeVisible();
+    test("keeps the operations apart and names them once, on the canvas", async ({ page }) => {
+        const legend = page.getByLabel("Colours in this drawing");
+        await expect(legend.getByText("Line Cutting")).toBeVisible();
+        await expect(legend.getByText("Line Engraving")).toBeVisible();
         await expect(stat(page, "Operations")).toContainText("2");
+
+        // One legend, in one place: the inspector used to carry the same list of
+        // coloured dots, which made the same fact contradictable.
+        await expect(page.getByTestId("inspector").locator("li", { hasText: "Line cutting" })).toHaveCount(0);
     });
 
     test("shows what the project says about the machine", async ({ page }) => {
@@ -408,22 +451,24 @@ test.describe("xTool project converter", () => {
     });
 
     test("converts the laser parameters for another module", async ({ page }) => {
-        await page.getByTestId("statusbar").getByRole("button", { name: /Laser parameters/ }).click();
+        // Open on arrival, so there is nothing to click first.
         const panel = page.locator("section[aria-label='Laser parameters']");
+        await expect(panel).toBeVisible();
         await expect(panel).toContainText("80 %");
         await expect(panel).toContainText("300 mm/s");
 
         await panel.getByLabel("Laser to convert the settings for").click();
-        await page.getByRole("option", { name: "Diode 20 W" }).click();
+        await page.getByRole("option", { name: /^Diode 20 W/ }).click();
         // 10 W at 80 % is 8 W; a 20 W module needs 40 % for the same energy.
         await expect(panel).toContainText("40 % · 300 mm/s");
     });
 
     test("warns about a wavelength change rather than converting it quietly", async ({ page }) => {
-        await page.getByTestId("statusbar").getByRole("button", { name: /Laser parameters/ }).click();
+        // Open on arrival, so there is nothing to click first.
         const panel = page.locator("section[aria-label='Laser parameters']");
+        await expect(panel).toBeVisible();
         await panel.getByLabel("Laser to convert the settings for").click();
-        await page.getByRole("option", { name: /CO₂ 40 W/ }).click();
+        await page.getByRole("option", { name: /^CO₂ 40 W/ }).click();
         await expect(panel).toContainText("455 nm → 10600 nm");
     });
 });

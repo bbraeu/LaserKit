@@ -18,7 +18,7 @@ const operations = [
 
 <Layout
     title="LaserKit — free in-browser tools for laser cutting & engraving"
-    description="Free browser tools for laser cutting: convert xTool Creative Space (.xcs) and xTool Studio (.xs) projects to DXF, Falcon Design Space (.fds) and SVG, trace the outer contour of a design into a cut line, and turn a design into a rubber stamp with the base plate and handle to match. Nothing is uploaded."
+    description="Free browser tools for laser cutting: convert xTool Creative Space (.xcs) and xTool Studio (.xs) projects to DXF, Falcon Design Space (.fds) and SVG, trace the outer contour of a design into a cut line, set a word in any installed font as a keychain or a sign, and turn a design into a rubber stamp with the base plate and handle to match. Nothing is uploaded."
 >
     <!-- ───────────────────────── Hero ───────────────────────── -->
     <section class="relative flex flex-col items-center justify-center px-4 pt-32 pb-14 text-center">
@@ -77,7 +77,7 @@ const operations = [
                 </p>
             </div>
 
-            <div class="mt-12 grid gap-5 lg:grid-cols-4">
+            <div class="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                 {TOOLS.map((o, i) => (
                     <a
                         href={`${base}${o.slug}`}

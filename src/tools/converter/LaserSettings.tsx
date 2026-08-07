@@ -1,4 +1,4 @@
-import { LASERS, convertSetting, getLaser } from "../../lib/lasers";
+import { LASERS, convertSetting, getLaser, laserLabel } from "../../lib/lasers";
 import type { CanvasMeta, ProjectMeta } from "../../lib/meta";
 import { Badge } from "../../components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
@@ -58,7 +58,11 @@ export function LaserSettings({ project, canvas, source, target, onSource, onTar
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="none">unknown</SelectItem>
-                            {LASERS.map(o => <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>)}
+                            {/* Named with the machines they ship on: the question
+                                here is which of them the project came off. */}
+                            {LASERS.map(o => (
+                                <SelectItem key={o.id} value={o.id}>{laserLabel(o, true)}</SelectItem>
+                            ))}
                         </SelectContent>
                     </Select>
                 </div>
@@ -75,6 +79,8 @@ export function LaserSettings({ project, canvas, source, target, onSource, onTar
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="none">— off —</SelectItem>
+                            {/* Just the wattage and the type: converting *to* is a
+                                choice about a machine you already have. */}
                             {LASERS.map(o => <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>)}
                         </SelectContent>
                     </Select>

@@ -32,8 +32,12 @@ export const exportDefault = async (page: Page): Promise<Download> => {
 /** Pick a format out of the export menu and hand back its download. */
 export const exportAs = async (page: Page, label: string | RegExp): Promise<Download> => {
     await page.getByTestId("export-menu").click();
+    // The row has to be there before it is clicked: two exports in a row race
+    // the menu's own open animation otherwise.
+    const item = page.getByRole("menuitem", { name: label });
+    await expect(item).toBeVisible();
     const wait = page.waitForEvent("download");
-    await page.getByRole("menuitem", { name: label }).click();
+    await item.click();
     return wait;
 };
 

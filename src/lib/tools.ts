@@ -68,6 +68,19 @@ export const TOOLS: ToolDef[] = [
         description: "Free in-browser image tracer: turn a PNG, JPEG or scan into vector paths with live threshold, smooth and optimize sliders. Outline or centreline, exported as SVG, DXF or Falcon Design Space."
     },
     {
+        id: "text",
+        slug: "text/",
+        label: "Text generator",
+        short: "Text",
+        hint: "type → keychain · sign · stencil",
+        blurb: "Set a word in any font on your machine and get it back as cuttable geometry — welded into one plate, with a keyring hole where you want it.",
+        // A capital T on a baseline: the one glyph that reads as "text" at 20 px.
+        icon: "M4.5 5.25h15M12 5.25V19.5M8.25 19.5h7.5",
+        accepts: ".ttf, .otf, .woff, .woff2",
+        title: "Text to SVG for laser cutting — keychains, signs and stencils | LaserKit",
+        description: "Free in-browser text generator for laser cutting: set a word in any font installed on your machine, weld the letters into one plate, add a keyring hole and export DXF, Falcon Design Space (.fds) or SVG. No font upload needed, nothing leaves your browser."
+    },
+    {
         // Renamed to the job it does. /invert/ is still a page — a redirect to
         // here — so links from before the rename keep working.
         id: "stamp",

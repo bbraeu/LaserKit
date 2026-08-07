@@ -147,6 +147,12 @@ export interface Choice<T extends string> {
     label: string;
     hint?: string;
     icon?: ReactNode;
+    /**
+     * What a screen reader calls it. Needed for an icon-only choice: without it
+     * the accessible name falls back to the tooltip, so "align right" ends up
+     * named "Ragged right" — a description, not a name.
+     */
+    srLabel?: string;
 }
 
 /** Two to four mutually exclusive choices, all of them visible. */
@@ -169,7 +175,7 @@ export function SegmentedField<T extends string>({ label, hint, value, choices, 
             onValueChange={(v: string) => { if (v) onChange(v as T); }}
         >
             {choices.map(o => (
-                <ToggleGroupItem key={o.id} value={o.id} title={o.hint}>
+                <ToggleGroupItem key={o.id} value={o.id} title={o.hint} aria-label={o.srLabel ?? o.label}>
                     {o.icon}
                     {o.label}
                 </ToggleGroupItem>

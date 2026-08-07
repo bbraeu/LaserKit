@@ -77,6 +77,21 @@ export interface StageSpec {
     picking?: boolean;
     /** a rebuild is in flight */
     pending?: boolean;
+    /**
+     * One thing on the drawing you can pick up and move.
+     *
+     * Its own element over the stage rather than a hit test inside it: a
+     * separate DOM node keeps the pan listeners from ever seeing the drag, and
+     * it gives the thing a visible grip instead of a place you have to know
+     * about. The position is in millimetres; the stage keeps it under the
+     * cursor as the view moves.
+     */
+    handle?: {
+        x: number;
+        y: number;
+        label: string;
+        onMove: (p: { x: number; y: number }) => void;
+    };
 }
 
 /** Handing the current design to another tool. */

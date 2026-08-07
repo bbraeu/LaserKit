@@ -1,0 +1,129 @@
+---
+import ToolPage from "../components/ToolPage.astro";
+import TextTool from "../tools/TextTool";
+---
+
+<ToolPage tool="text">
+    <Fragment slot="lead">
+        Type a word, pick any font <strong class="text-slate-300">installed on your machine</strong>, and get it back
+        as real cuttable geometry — the letters welded into one plate, with a keyring hole wherever you want it. No
+        font upload, no "convert text to paths" step in another program first.
+    </Fragment>
+
+    <TextTool client:only="react">
+        <div slot="fallback" class="flex h-[100dvh] flex-col bg-[#08090d]">
+            <div class="h-12 shrink-0 border-b border-white/7"></div>
+            <div class="flex min-h-0 flex-1">
+                <div class="hidden w-60 shrink-0 border-r border-white/7 xl:block"></div>
+                <div class="flex-1"></div>
+                <div class="hidden w-76 shrink-0 border-l border-white/7 xl:block"></div>
+            </div>
+            <div class="h-7 shrink-0 border-t border-white/7"></div>
+        </div>
+    </TextTool>
+
+    <section slot="notes" class="relative px-4 pb-24">
+        <div class="mx-auto w-[min(72rem,100%)]">
+            <div class="grid gap-5 lg:grid-cols-3">
+                <article class="glass reveal rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">Any font, no upload</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        A browser will not hand over a font's outlines: a canvas can <em>draw</em> text but not say
+                        where its edges are, and an SVG <code class="text-slate-300">&lt;text&gt;</code> is a promise
+                        the importer has to keep, not a shape. So the word is rendered large and put through the same
+                        tracer the image tool uses. Every typeface on your machine works, the browser does the kerning
+                        and the ligatures, and the outline is accurate to the figure in the status bar rather than
+                        exactly. Nothing is fitted across a corner: a typeface is the one thing people recognise
+                        instantly — round the corners off Arial's stems and it stops being Arial — so the outline
+                        follows the glyph vertex for vertex unless you ask otherwise under
+                        <strong class="text-slate-300">Outline</strong>.
+                        Drop a <strong class="text-slate-300">.ttf</strong>, <strong class="text-slate-300">.otf</strong>,
+                        <strong class="text-slate-300">.woff</strong> or <strong class="text-slate-300">.woff2</strong>
+                        on the canvas to add one that is not installed.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 110ms">
+                    <h2 class="text-lg font-semibold text-white">Cap height, not font size</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        A font's em is larger than its capitals by an amount that differs per typeface, so "24 pt"
+                        tells you nothing about the material. The size control here is the
+                        <strong class="text-slate-300">cap height</strong>: set 20 mm and a capital comes out 20 mm,
+                        in every font, whether or not the word has a descender in it.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 220ms">
+                    <h2 class="text-lg font-semibold text-white">One piece, not a bag of letters</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Letters that do not touch come off the bed as loose shapes. The plate is traced by the same
+                        code as the <a href="/LaserKit/contour/" class="text-slate-300 underline decoration-cyan-400/40 underline-offset-4 transition hover:text-cyan-300">outer contour tracer</a>,
+                        so the border, <em>shrink-wrap</em>, <em>bridges</em> and the <em>taut band</em> all work the
+                        same way here — widen the border until the letters weld, or join them outright.
+                    </p>
+                </article>
+            </div>
+
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">Letters that overlap</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    Tighten the letter spacing past touching and the word becomes one silhouette — an
+                    <em>rn</em> reads as an <em>m</em>. <strong class="text-slate-300">Engrave where letters
+                    overlap</strong> puts the boundary back. Every letter is traced on its own and laid down left to
+                    right, the way sheets of paper stack, and its outline is engraved
+                    <em>only</em> where it laps over an earlier letter and is not itself covered by a later one.
+                    Everywhere else the cut line already shows the shape, so a line there would be redundant and
+                    would sit on top of the cut. The first letter gets nothing — there is nothing behind it to lap
+                    onto. It goes out as line engraving, in green, separate from the fill.
+                </p>
+            </div>
+
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">The keyring hole</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    Pick an edge, slide it along that edge, and set how far in from it the centre sits. The
+                    <strong class="text-slate-300">wall</strong> is the useful part: the material kept around the hole
+                    is welded into the design <em>before</em> the outline is traced, so a hole placed off the end of a
+                    word grows its own lug to sit in rather than breaking out of thin air. Set it to 0 and the hole is
+                    punched straight through whatever plate is already there. If it still lands off the plate, the
+                    status bar says so.
+                </p>
+                <dl class="mt-4 grid gap-4 text-sm leading-relaxed sm:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                        <dt class="font-semibold text-slate-200">Keychain</dt>
+                        <dd class="mt-1 text-slate-400">
+                            Welded plate, letters engraved into it, a 4 mm hole on the left — the size a split ring
+                            takes.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Free-standing letters</dt>
+                        <dd class="mt-1 text-slate-400">
+                            A 0.6 mm border and no letter operation at all: the plate's own outline <em>is</em> the
+                            word, joined just enough to survive being picked up.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Stencil</dt>
+                        <dd class="mt-1 text-slate-400">
+                            A taut band around the whole word with the letters cut clean out of it. Mind the counters
+                            — the middle of an O falls out.
+                        </dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Engrave only</dt>
+                        <dd class="mt-1 text-slate-400">
+                            No plate, no hole: just the lettering, to burn onto something you already have.
+                        </dd>
+                    </div>
+                </dl>
+            </div>
+
+            <p class="reveal mt-5 text-xs leading-relaxed text-slate-500">
+                Engraved letters export as one even-odd path in surface-engraving blue; the plate, the hole and cut
+                letters all go out in cutting red. DXF has no fills, so an engraved letter goes out as its closed
+                contours in the engraving colour and the alternation is left to your laser software — which is how it
+                fills nested closed contours anyway. Kerf is not compensated: a 4 mm hole comes out a kerf wider, so
+                drill-fit parts want a test cut first.
+            </p>
+        </div>
+    </section>
+</ToolPage>

@@ -82,6 +82,10 @@ export interface StageProps {
 
 export function Stage(props: StageProps) {
     const { spec, prefs, readout } = props;
+    // The per-frame callback below is created once; it reads the current spec
+    // through a ref rather than closing over a stale one.
+    const specRef = useRef(spec);
+    specRef.current = spec;
     const [dragOver, setDragOver] = useState(false);
     const fileRef = useRef<HTMLInputElement>(null);
 
@@ -89,6 +93,7 @@ export function Stage(props: StageProps) {
     const rulerLeftRef = useRef<HTMLCanvasElement>(null);
     const centreVRef = useRef<HTMLDivElement>(null);
     const centreHRef = useRef<HTMLDivElement>(null);
+    const handleRef = useRef<HTMLButtonElement>(null);
     /** the drawing's own centre in millimetres, recomputed only when it changes */
     const centreRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -122,6 +127,11 @@ export function Stage(props: StageProps) {
             centreVRef.current.style.left = `${(c.x - v.x) * v.pxPerMm}px`;
             centreHRef.current.style.top = `${(c.y - v.y) * (v.clientHeight / v.h)}px`;
         }
+        const grip = handleRef.current;
+        if (grip && specRef.current.handle) {
+            grip.style.left = `${(specRef.current.handle.x - v.x) * v.pxPerMm}px`;
+            grip.style.top = `${(specRef.current.handle.y - v.y) * (v.clientHeight / v.h)}px`;
+        }
         if (readout?.zoom.current) {
             readout.zoom.current.textContent = `${Math.round(v.relative * 100)} %`;
         }
@@ -154,11 +164,12 @@ export function Stage(props: StageProps) {
         if (v) onView(v);
     }, [spec.svg, stageRef, read, onView]);
 
-    // Redraw the rulers when they are switched back on, or the stage resizes.
+    // Redraw the rulers when they are switched back on, the stage resizes, or
+    // the handle moved because something other than a drag moved it.
     useEffect(() => {
         const v = read();
         if (v) onView(v);
-    }, [prefs.grid, prefs.rulers, prefs.centre, read, onView]);
+    }, [prefs.grid, prefs.rulers, prefs.centre, spec.handle?.x, spec.handle?.y, read, onView]);
 
     // Picking is hit-tested against the geometry, not the click target: panning
     // captures the pointer and would retarget the event.
@@ -258,6 +269,47 @@ export function Stage(props: StageProps) {
                             )}
                             dangerouslySetInnerHTML={{ __html: spec.svg }}
                         />
+
+                        {spec.handle && (
+                            <button
+                                ref={handleRef}
+                                data-testid="stage-handle"
+                                aria-label={spec.handle.label}
+                                title={spec.handle.label}
+                                // The grip moves itself while it is dragged and
+                                // reports only once, on release. Reporting per
+                                // frame would rebuild the whole drawing sixteen
+                                // times a second to answer a question the user
+                                // has not finished asking.
+                                onPointerDown={e => {
+                                    e.currentTarget.setPointerCapture(e.pointerId);
+                                    e.currentTarget.dataset.dragging = "true";
+                                }}
+                                onPointerMove={e => {
+                                    const el = e.currentTarget;
+                                    if (!el.dataset.dragging) return;
+                                    const rect = el.parentElement?.getBoundingClientRect();
+                                    if (!rect) return;
+                                    el.style.left = `${e.clientX - rect.left}px`;
+                                    el.style.top = `${e.clientY - rect.top}px`;
+                                }}
+                                onPointerUp={e => {
+                                    const el = e.currentTarget;
+                                    if (el.dataset.dragging) {
+                                        delete el.dataset.dragging;
+                                        const q = toDrawing(e.clientX, e.clientY);
+                                        if (q) specRef.current.handle?.onMove(q);
+                                    }
+                                    if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+                                }}
+                                onPointerCancel={e => { delete e.currentTarget.dataset.dragging; }}
+                                className={cn(
+                                    "absolute z-20 size-5 -translate-x-1/2 -translate-y-1/2 cursor-grab rounded-full",
+                                    "border-2 border-accent bg-panel/80 shadow-lg shadow-black/40 backdrop-blur",
+                                    "transition-transform hover:scale-125 [&[data-dragging]]:scale-125 [&[data-dragging]]:cursor-grabbing"
+                                )}
+                            />
+                        )}
 
                         {prefs.centre && (
                             <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">

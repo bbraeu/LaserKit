@@ -22,23 +22,48 @@
 
 export interface Laser {
     id: string;
+    /** what the module *is* — wattage and type, and nothing else */
     label: string;
     /** optical output in watts */
     watt: number;
     /** nm: 455 blue diode, 1064 IR/fibre, 10600 CO₂ */
     wavelength: number;
+    /**
+     * Machines this module ships on.
+     *
+     * Only ever shown for the laser being converted *from*, where the question
+     * is "which of these did my project come off?" and the model name is the
+     * quickest way to answer it. Converting *to* is a choice about a machine you
+     * already know, so there the wattage and the type are the whole story.
+     */
+    machines?: string;
 }
 
+/** The module named for a picker: generic, or with the machines that carry it. */
+export const laserLabel = (o: Laser, bMachines = false): string =>
+    bMachines && o.machines ? `${o.label} · ${o.machines}` : o.label;
+
+/**
+ * The modules a project is likely to have been made for, and the ones you might
+ * be moving it to. The wattages are the optical output the manufacturer states.
+ *
+ * The machine names are a finding aid, not a spec — several models ship in more
+ * than one configuration, and a module can be moved between bodies. The number
+ * and the wavelength are what the conversion actually uses.
+ */
 export const LASERS: Laser[] = [
-    { id: "diode-2", label: "Diode 2 W", watt: 2, wavelength: 455 },
-    { id: "diode-5", label: "Diode 5 W", watt: 5, wavelength: 455 },
-    { id: "diode-10", label: "Diode 10 W", watt: 10, wavelength: 455 },
-    { id: "diode-20", label: "Diode 20 W", watt: 20, wavelength: 455 },
-    { id: "diode-40", label: "Diode 40 W", watt: 40, wavelength: 455 },
-    { id: "ir-2", label: "IR 2 W · 1064 nm", watt: 2, wavelength: 1064 },
+    { id: "diode-2", label: "Diode 2 W · 455 nm", watt: 2, wavelength: 455 },
+    { id: "diode-5", label: "Diode 5 W · 455 nm", watt: 5, wavelength: 455, machines: "D1, M1" },
+    { id: "diode-10", label: "Diode 10 W · 455 nm", watt: 10, wavelength: 455, machines: "D1, M1, F1, S1" },
+    { id: "diode-20", label: "Diode 20 W · 455 nm", watt: 20, wavelength: 455, machines: "D1 Pro, S1, F1 Ultra" },
+    { id: "diode-40", label: "Diode 40 W · 455 nm", watt: 40, wavelength: 455, machines: "S1" },
+    { id: "ir-2", label: "IR 2 W · 1064 nm", watt: 2, wavelength: 1064, machines: "F1, S1 module" },
     { id: "ir-5", label: "IR 5 W · 1064 nm", watt: 5, wavelength: 1064 },
-    { id: "co2-40", label: "CO₂ 40 W", watt: 40, wavelength: 10600 },
-    { id: "co2-60", label: "CO₂ 60 W", watt: 60, wavelength: 10600 }
+    { id: "ir-20", label: "Fibre 20 W · 1064 nm", watt: 20, wavelength: 1064, machines: "F1 Ultra" },
+    { id: "ir-60", label: "Fibre 60 W · 1064 nm", watt: 60, wavelength: 1064, machines: "F2 Ultra" },
+    { id: "co2-40", label: "CO₂ 40 W · 10600 nm", watt: 40, wavelength: 10600 },
+    { id: "co2-55", label: "CO₂ 55 W · 10600 nm", watt: 55, wavelength: 10600, machines: "P2, P2S, P3" },
+    { id: "co2-60", label: "CO₂ 60 W · 10600 nm", watt: 60, wavelength: 10600 }
 ];
 
 export const getLaser = (sId: string): Laser | undefined => LASERS.find(o => o.id === sId);

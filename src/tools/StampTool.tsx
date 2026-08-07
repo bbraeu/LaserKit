@@ -10,7 +10,7 @@ import type { DesignDoc } from "../lib/design";
 import { PanelSection } from "../workspace/PanelSection";
 import { Preview } from "../workspace/Preview";
 import { Workspace } from "../workspace/Workspace";
-import { Field, PairField, SegmentedField, SelectField, SliderField, ToggleField } from "../workspace/fields";
+import { PairField, SegmentedField, SelectField, SliderField, ToggleField } from "../workspace/fields";
 import { designExports, textBlob } from "../workspace/formats";
 import { useDebouncedBuild } from "../workspace/hooks/useDebouncedBuild";
 import { useDocumentSource } from "../workspace/hooks/useDocumentSource";
@@ -43,6 +43,9 @@ import type { ExportItem, LegendItem } from "../workspace/types";
 const MARGIN_MAX = 60;
 const RADIUS_MAX = 40;
 
+/** How far the artwork may be nudged inside its plate, mm. */
+const OFFSET_MAX = 40;
+
 /** Mirrors GRIP_HEIGHT in lib/stamp.ts — what the layer count aims at. */
 const GRIP_TARGET = 20;
 
@@ -57,6 +60,9 @@ interface StampParams {
     radius: number;
     mirror: MirrorAxis;
     cut: boolean;
+    /** nudge the artwork inside the plate, mm */
+    offsetX: number;
+    offsetY: number;
     handle: HandleType;
     /** layers in the glued stack; 0 = what this sheet needs for a 20 mm grip */
     gripLayers: number;
@@ -82,6 +88,8 @@ const DEFAULTS: StampParams = {
     margin: 3,
     radius: 0,
     mirror: "none",
+    offsetX: 0,
+    offsetY: 0,
     // A stamp face has to come off the sheet, so the same file may as well free
     // it: the plate's edge goes out a second time in cutting red.
     cut: true,
@@ -97,7 +105,7 @@ const DEFAULTS: StampParams = {
 // Settings that belong to the open file rather than to the workshop. The height
 // is one of them because it follows the design's proportions; the width is not,
 // because "my stamps are 50 mm wide" is a fact about the person, not the file.
-const TRANSIENT: (keyof StampParams)[] = ["sizeH", "widthOverride"];
+const TRANSIENT: (keyof StampParams)[] = ["sizeH", "widthOverride", "offsetX", "offsetY"];
 
 const FRAMES = [
     { id: "rect" as const, label: "Rect", icon: <Square className="size-3" />, hint: "The design's bounding box grown by the margin. Round the corners to match a stamp mount." },
@@ -149,9 +157,10 @@ export default function StampTool() {
         margin: p.margin,
         radius: p.radius,
         mirror: p.mirror,
+        offset: { x: p.offsetX, y: p.offsetY },
         cut: p.cut,
         scale: p.widthOverride && d.width > 0 ? p.widthOverride / d.width : 1
-    }), [p.frame, p.sized, p.sizeW, sizeH, p.margin, p.radius, p.mirror, p.cut, p.widthOverride]);
+    }), [p.frame, p.sized, p.sizeW, sizeH, p.margin, p.radius, p.mirror, p.offsetX, p.offsetY, p.cut, p.widthOverride]);
 
     // A new file, canvas, scale, plate shape or named size is a different drawing
     // at a very different size — a circle around a wide design is more than twice
@@ -342,6 +351,33 @@ export default function StampTool() {
                     onChange={n => params.set({ margin: n }, { label: "Margin", coalesce: "margin" })}
                 />
 
+                <SliderField
+                    label="Move across"
+                    hint="The plate is built around the artwork's bounding box, and a box is not what the eye centres on — a motif with a tail or a flourish reads as crooked at dead centre. This moves the artwork; the plate stays put."
+                    value={p.offsetX}
+                    min={-OFFSET_MAX}
+                    max={OFFSET_MAX}
+                    step={0.1}
+                    onChange={n => params.set({ offsetX: n }, { label: "Move the artwork", coalesce: "offsetX" })}
+                />
+                <SliderField
+                    label="Move down"
+                    hint="The same, vertically. Positive moves it down the plate."
+                    value={p.offsetY}
+                    min={-OFFSET_MAX}
+                    max={OFFSET_MAX}
+                    step={0.1}
+                    onChange={n => params.set({ offsetY: n }, { label: "Move the artwork", coalesce: "offsetY" })}
+                />
+                {(p.offsetX !== 0 || p.offsetY !== 0) && (
+                    <button
+                        onClick={() => params.set({ offsetX: 0, offsetY: 0 }, { label: "Recentre the artwork" })}
+                        className="text-[11px] text-accent/80 underline decoration-accent/40 underline-offset-2 transition-colors hover:text-accent"
+                    >
+                        back to the middle
+                    </button>
+                )}
+
                 {p.frame === "rect" && (
                     <SliderField
                         label="Corner radius"
@@ -369,12 +405,9 @@ export default function StampTool() {
                     checked={p.cut}
                     onChange={b => params.set({ cut: b }, { label: "Cut the plate out" })}
                 />
-                <Field label="Operations">
-                    <ul className="space-y-1 text-[11px] leading-snug text-subtle-foreground">
-                        <li><span className="text-muted-foreground">Engraved away</span> — everything around the artwork, as surface engraving</li>
-                        <li><span className="text-muted-foreground">Left standing</span> — the artwork itself, untouched</li>
-                    </ul>
-                </Field>
+                {/* What is engraved and what is left standing is named in the
+                    legend on the canvas; repeating it here made two lists of the
+                    same thing. */}
             </PanelSection>
 
             {/* ── What you hold it by ────────────────────────────────────── */}

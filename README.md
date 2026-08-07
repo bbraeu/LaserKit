@@ -27,6 +27,7 @@ there plus a page that names it.
 | `/convert/` | **xTool project converter** | `.xcs` / `.xs` → DXF · FDS · SVG |
 | `/contour/` | **Outer contour tracer** | `.svg` / `.xcs` / `.xs` → cut line |
 | `/trace/` | **Trace an image** | `.png` / `.jpg` / `.gif` / `.bmp` / `.webp` → vectors |
+| `/text/` | **Text generator** | type → keychain · sign · stencil |
 | `/stamp/` | **Stamp creator** | `.svg` / `.xcs` / `.xs` → stamp |
 
 `/invert/`, where the stamp creator lived while it was called *Invert a design*,
@@ -37,7 +38,8 @@ The converter, contour tracer and stamp creator all read a dropped file through 
 same `src/lib/design.ts` — one `DesignDoc` per canvas, geometry in millimetres
 with curves already flattened — so every tool works on exactly what would be cut.
 The image tracer starts from pixels instead, and joins the others at the point
-where geometry becomes a DXF, an `.fds` or an SVG.
+where geometry becomes a DXF, an `.fds` or an SVG. The text generator has no
+input file at all: the document is the text.
 
 ### Passing work between tools
 
@@ -206,6 +208,49 @@ GPL-2.0, which would spread to the whole of LaserKit.
 An SVG that states no physical size is read at 96 dpi (what every importer
 assumes) and the width can be corrected in the panel; `.xcs` coordinates are
 millimetres already.
+
+## Text generator
+
+Type a word, pick any font installed on the machine, and get cuttable geometry
+back — no "convert text to paths" step in another program first.
+
+- **Any font, no upload.** A browser will not hand over glyph outlines: a canvas
+  can *draw* text but not say where its edges are, and an SVG `<text>` is a
+  promise the importer has to keep rather than a shape. So the word is rendered
+  large and put through `src/lib/trace.ts`. That buys every typeface on the
+  machine, the browser's own kerning and ligatures, and one honest cost — the
+  outline is fitted to a raster, so it is accurate to the figure in the status
+  bar rather than exactly. Dropping a `.ttf` / `.otf` / `.woff` / `.woff2`
+  registers it through `FontFace` for a face that is not installed.
+  `src/lib/fonts.ts` probes which families really exist by measuring a string
+  against three fallbacks — `queryLocalFonts()` is Chromium-only and behind a
+  permission prompt.
+- **The render is scaled to the glyph, not to the millimetres.** The tracer's
+  corner detection and node reduction both work in pixels, so a fixed px/mm
+  would melt a 6 mm keychain while a 60 mm sign came out crisp. The capital is
+  pinned to a constant pixel height instead, so fidelity is the same at every
+  size. Text also needs *no* curve-fitting: the tracer's defaults are tuned for
+  a rasterised photo edge that should become a curve, and on a letter they round
+  the corner off every stem — round Arial's corners and it stops being Arial. So
+  Smooth and Simplify both start at 0 here, and the outline follows the glyph
+  vertex for vertex.
+- **Cap height, not font size.** A font's em is bigger than its capitals by an
+  amount that differs per typeface, so "24 pt" says nothing about the material.
+  Set 20 mm and a capital is 20 mm, in any face, descender or not.
+- **The plate is the contour tracer.** The traced glyphs are subpaths in
+  millimetres, so `buildOutline` welds them into one piece exactly as it does
+  for `/contour/` — same border, same *shrink-wrap*, *bridges* and *taut band*.
+- **Letters that overlap.** Tighten the spacing past touching and the word
+  becomes one silhouette — an *rn* reads as an *m*. *Engrave where letters
+  overlap* traces every glyph on its own, stacks them left to right the way
+  sheets of paper lie, and engraves a contour only where it laps over an
+  earlier letter *and* is not covered by a later one. Everywhere else the cut
+  line already shows the shape. The first letter gets nothing.
+- **The keyring hole** takes an edge, a position along it, an inset and a wall.
+  The wall is the useful part: the material around the hole is added to the
+  design *before* the outline is traced, so a hole placed off the end of a word
+  grows its own lug rather than breaking out of thin air. If it still lands off
+  the plate, the status bar says so.
 
 ## Project settings
 

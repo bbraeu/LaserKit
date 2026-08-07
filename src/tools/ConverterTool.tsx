@@ -246,6 +246,10 @@ export default function ConverterTool() {
             bottomPanels={doc && doc.meta.settings.length ? [{
                 id: "laser",
                 title: "Laser parameters",
+                // Power and speed cannot travel inside a DXF, an SVG or an .fds,
+                // so they are the one thing a conversion loses. Open on arrival,
+                // because a number nobody saw is a number nobody wrote down.
+                defaultOpen: true,
                 children: (
                     <LaserSettings
                         project={doc.project}
@@ -261,22 +265,14 @@ export default function ConverterTool() {
                 )
             }] : undefined}
         >
+            {/* The operations themselves are named in the legend on the canvas —
+                one list, in one place. What belongs here is only what the legend
+                cannot say. */}
             <PanelSection id="convert-operations" title="Operations">
-                {doc?.operations.length ? (
-                    <ul className="space-y-1">
-                        {doc.operations.map(op => (
-                            <li key={op.name} className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <span className="size-2.5 shrink-0 rounded-full" style={{ background: op.css }} aria-hidden="true" />
-                                {op.name}
-                            </li>
-                        ))}
-                    </ul>
-                ) : (
-                    <p className="text-[11px] text-subtle-foreground">This canvas has no recognised operations.</p>
-                )}
-                <p className="mt-2 text-[11px] leading-relaxed text-subtle-foreground">
-                    Every export keeps these apart by colour, so power and speed are assigned once per operation in
-                    your laser software rather than per shape.
+                <p className="text-[11px] leading-relaxed text-subtle-foreground">
+                    {doc?.operations.length
+                        ? "Every export keeps the operations on the canvas apart by colour, so power and speed are assigned once per operation in your laser software rather than per shape."
+                        : "This canvas has no recognised operations."}
                 </p>
             </PanelSection>
 

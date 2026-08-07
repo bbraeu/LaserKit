@@ -62,6 +62,15 @@ export interface InvertOptions {
     /** corner radius in mm — rectangular plates only */
     radius: number;
     mirror: MirrorAxis;
+    /**
+     * Nudge the artwork inside the plate, in mm.
+     *
+     * The plate is built around the design's bounding box, which centres a
+     * *box* — and a box is not what the eye centres on. A motif with a long
+     * tail or an off-centre flourish reads as crooked at dead centre, so the
+     * plate stays where it is and the artwork moves within it.
+     */
+    offset: { x: number; y: number };
     /** multiplier on the geometry, for an SVG whose physical size had to be guessed */
     scale: number;
     /** also emit the plate's edge as a cut line, to free the stamp from the sheet */
@@ -367,13 +376,21 @@ export const buildInvert = (doc: DesignDoc, o: InvertOptions): InvertResult => {
         // a ring at even depth adds, a hole at odd depth takes away.
         fDesign = aDesign.reduce((s, r) => s + (r.depth % 2 ? -r.area : r.area), 0);
 
+    // Where each ring really ends up: mirrored about the design's own centre,
+    // then nudged. Worked out once, because both the fits-inside check and the
+    // output need the same answer.
+    const dx = o.offset?.x ?? 0,
+        dy = o.offset?.y ?? 0,
+        aPlaced = aDesign.map(r =>
+            mirrorRing(r.pts, o.mirror, mcx, mcy).map(p => ({ x: p.x + dx, y: p.y + dy })));
+
     // A rounded or elliptical plate can bite into the design's bounding box, so
     // whether the artwork actually fits has to be asked point by point.
-    const iOutside = aDesign.reduce(
-        (n, r) => n + (r.pts.some(p => !oFrame.holds(p)) ? 1 : 0), 0
+    const iOutside = aPlaced.reduce(
+        (n, a) => n + (a.some(p => !oFrame.holds(p)) ? 1 : 0), 0
     );
     if (iOutside) {
-        aWarnings.push(`${iOutside} ${iOutside === 1 ? "shape reaches" : "shapes reach"} past the plate's edge and ${iOutside === 1 ? "is" : "are"} cut off by it — raise the margin, or lower the corner radius.`);
+        aWarnings.push(`${iOutside} ${iOutside === 1 ? "shape reaches" : "shapes reach"} past the plate's edge and ${iOutside === 1 ? "is" : "are"} cut off by it — raise the margin, lower the corner radius${dx || dy ? ", or move the artwork back" : ""}.`);
     }
 
     const bFrame = ringBounds([oFrame.ring]),
@@ -388,9 +405,7 @@ export const buildInvert = (doc: DesignDoc, o: InvertOptions): InvertResult => {
         // exactly as big as the piece.
         frame = shiftRing(oFrame.ring, -bFrame.x0, -bFrame.y0),
         spec = shiftFrame(oFrame.spec, -bFrame.x0, -bFrame.y0),
-        aRing = aDesign.map(r =>
-            shiftRing(mirrorRing(r.pts, o.mirror, mcx, mcy), -bFrame.x0, -bFrame.y0)
-        ),
+        aRing = aPlaced.map(a => shiftRing(a, -bFrame.x0, -bFrame.y0)),
         fFrame = ringArea(frame),
         engraved = fFrame > 0 ? Math.max(0, Math.min(1, (fFrame - fDesign) / fFrame)) : 0;
 

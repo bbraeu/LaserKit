@@ -93,6 +93,15 @@ export interface OutlineResult {
     accuracy: number;
     /** shrink-wrap reach the gaps in the selection ask for, mm */
     autoReach: number;
+    /**
+     * The cut lines as geometry, in the design's own coordinates.
+     *
+     * The strings above are what the contour tracer needs; a tool that builds
+     * something *on top of* the plate — the text generator punching a keyring
+     * hole in it — needs the rings themselves rather than a path it would have
+     * to parse back out of its own SVG.
+     */
+    aRing: Point[][];
     /** every item in the design, in the order the selection indices refer to */
     aItem: OutlineItem[];
     /** the indices actually traced */
@@ -654,6 +663,7 @@ export const buildOutline = (doc: OutlineDoc, o: OutlineOptions): OutlineResult 
             points: 0,
             accuracy: 0,
             autoReach: 0,
+            aRing: [],
             aItem,
             aSelected,
             warnings: aWarnings
@@ -756,6 +766,7 @@ export const buildOutline = (doc: OutlineDoc, o: OutlineOptions): OutlineResult 
         accuracy,
         // The reach this outline came out of, so the slider can start there.
         autoReach: Math.round(reachUsed * 10) / 10,
+        aRing,
         aItem,
         aSelected,
         warnings: aWarnings
