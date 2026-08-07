@@ -144,6 +144,20 @@ jobs:
           echo "subject=$(git log -1 --pretty=%s)" >> "$GITHUB_OUTPUT"
           echo "package.json $PKG, newest tag ${LATEST:-none} -> v$NEXT"
 
+          # `--generate-notes` alone writes little more than a compare link in a
+          # repo with no pull requests, so the commit subjects since the last
+          # tag go in ahead of it. That is what the history actually is here.
+          {
+            echo 'notes<<RELEASE_NOTES'
+            if [ -n "$LATEST" ]; then
+              git log --reverse --pretty='- %s' "v$LATEST..HEAD"
+            else
+              git log --reverse --pretty='- %s'
+            fi
+            echo
+            echo 'RELEASE_NOTES'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Download the build
         uses: actions/download-artifact@v7
         with:
@@ -162,6 +176,7 @@ jobs:
           gh release create "${{ steps.v.outputs.tag }}" \
             --target "${{ github.sha }}" \
             --title "${{ steps.v.outputs.tag }} — ${{ steps.v.outputs.subject }}" \
+            --notes "${{ steps.v.outputs.notes }}" \
             --generate-notes \
             --latest \
             "laserkit-${{ steps.v.outputs.tag }}.zip#The built site, for running it offline"
