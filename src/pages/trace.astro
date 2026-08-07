@@ -1,6 +1,6 @@
 ---
 import ToolPage from "../components/ToolPage.astro";
-import Tracer from "../components/Tracer";
+import TraceTool from "../tools/TraceTool";
 ---
 
 <ToolPage tool="trace">
@@ -10,7 +10,17 @@ import Tracer from "../components/Tracer";
         preview follows you as you drag it rather than after you commit.
     </Fragment>
 
-    <Tracer client:load />
+    <TraceTool client:only="react">
+        <div slot="fallback" class="flex h-[100dvh] flex-col bg-[#08090d]">
+            <div class="h-12 shrink-0 border-b border-white/7"></div>
+            <div class="flex min-h-0 flex-1">
+                <div class="hidden w-60 shrink-0 border-r border-white/7 xl:block"></div>
+                <div class="flex-1"></div>
+                <div class="hidden w-76 shrink-0 border-l border-white/7 xl:block"></div>
+            </div>
+            <div class="h-7 shrink-0 border-t border-white/7"></div>
+        </div>
+    </TraceTool>
 
     <section slot="notes" class="relative px-4 pb-24">
         <div class="mx-auto w-[min(72rem,100%)]">

@@ -1,11 +1,22 @@
 ---
 import Layout from "../layouts/Layout.astro";
-import ToolIcon from "./ToolIcon.astro";
-import { TOOLS, getTool } from "../lib/tools";
+import { getTool } from "../lib/tools";
 
-// The frame every tool page shares: its own title and description, a switcher
-// across the kit, the heading, and then the tool itself. Anything a tool wants to
-// explain below its workspace goes into the "notes" slot.
+// The frame every tool page shares.
+//
+// A tool page is the workspace and nothing else: exactly one screen, no page
+// scroll, no strip of marketing above the app pushing it down. Everything that
+// explains the tool — the heading, the lead, the explainer cards — lives in an
+// overlay you open from the left panel.
+//
+// That is not a demotion of the copy. It is still in the page's HTML, in the
+// same heading order, still exactly what the search traffic for "xcs to dxf"
+// arrives for; it is only that someone who came here to convert a file meets
+// the tool, and someone who came here to understand it is one click away.
+//
+// A real <dialog> rather than a React modal: Escape, the backdrop and the focus
+// trap come from the platform, and the content stays server-rendered instead of
+// being handed to an island that would have to re-render all of it.
 
 interface Props {
     tool: string;
@@ -13,49 +24,74 @@ interface Props {
 
 const { tool } = Astro.props;
 const oTool = getTool(tool);
-const base = import.meta.env.BASE_URL;
 ---
 
-<Layout title={oTool.title} description={oTool.description} tool={tool}>
-    <section class="relative px-4 pt-28 pb-4">
-        <div class="mx-auto w-[min(72rem,100%)]">
-            <!-- Switching tools is one click from anywhere inside the kit -->
-            <nav aria-label="Tools" class="flex flex-wrap gap-2">
-                {TOOLS.map(o => (
-                    <a
-                        href={`${base}${o.slug}`}
-                        aria-current={o.id === tool ? "page" : undefined}
-                        title={o.hint}
-                        class:list={[
-                            "flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition",
-                            o.id === tool
-                                ? "border-cyan-400/40 bg-linear-to-r from-cyan-500/20 to-violet-500/20 font-semibold text-white"
-                                : "border-white/10 bg-white/[0.03] text-slate-400 hover:border-cyan-400/40 hover:text-white"
-                        ]}
-                    >
-                        <ToolIcon tool={o} class={`size-4 shrink-0 ${o.id === tool ? "text-cyan-300" : "text-slate-500"}`} />
-                        {o.short}
-                    </a>
-                ))}
-            </nav>
+<Layout title={oTool.title} description={oTool.description} tool={tool} chrome="app">
+    <!-- The workspace: toolbar, sidebar, canvas, inspector, status bar -->
+    <slot />
 
-            <h1 class="reveal is-visible mt-8 text-4xl font-black tracking-tight text-white sm:text-5xl">
-                {oTool.label}
-            </h1>
-            <p class="reveal is-visible mt-4 max-w-2xl text-lg text-slate-400" style="--reveal-delay: 80ms">
-                <slot name="lead">{oTool.blurb}</slot>
-            </p>
-            <p class="reveal is-visible mt-3 text-sm text-slate-500" style="--reveal-delay: 120ms">
-                Takes {oTool.accepts} · runs entirely in your browser · nothing is uploaded
-            </p>
+    <dialog id="tool-about" aria-labelledby="tool-about-title">
+        <div class="flex max-h-[inherit] flex-col">
+            <div class="flex shrink-0 items-start gap-4 border-b border-white/8 px-6 py-5">
+                <div class="min-w-0 flex-1">
+                    <h1 id="tool-about-title" class="text-2xl font-bold tracking-tight text-white">
+                        {oTool.label}
+                    </h1>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        <slot name="lead">{oTool.blurb}</slot>
+                    </p>
+                    <p class="mt-2 font-mono text-[11px] text-slate-500">
+                        Takes {oTool.accepts} · runs entirely in your browser · nothing is uploaded
+                    </p>
+                </div>
+                <button
+                    id="tool-about-close"
+                    aria-label="Close"
+                    class="shrink-0 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-white/8 hover:text-white"
+                >
+                    <svg class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div id="tool-notes" class="scroll-slim min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-6">
+                <slot name="notes" />
+
+                <!-- The site footer cannot appear under a workspace that fills
+                     the screen, so what it carried comes to rest here. -->
+                <div class="mt-8 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 border-t border-white/8 pt-6 text-center">
+                    <p class="text-xs text-slate-500">
+                        Built by <a href="https://github.com/bbraeu" target="_blank" rel="noopener" class="text-slate-300 underline decoration-cyan-400/40 underline-offset-4 transition hover:text-cyan-300">bbraeu</a>
+                        · based on <a href="https://nanovsky.github.io/XCStoSVG/" target="_blank" rel="noopener" class="text-slate-300 underline decoration-violet-400/40 underline-offset-4 transition hover:text-violet-300">XCStoSVG by Daniel Nanovski</a>
+                        · <a href="https://github.com/bbraeu/LaserKit" target="_blank" rel="noopener" class="text-slate-300 underline decoration-slate-500 underline-offset-4 transition hover:text-white">source</a>
+                    </p>
+                    <button id="cookie-settings" class="text-xs text-slate-500 underline decoration-slate-600 underline-offset-2 transition hover:text-slate-300">
+                        Cookie settings
+                    </button>
+                </div>
+            </div>
         </div>
-    </section>
+    </dialog>
 
-    <section class="relative px-4 pt-8 pb-16">
-        <div class="mx-auto w-[min(72rem,100%)]">
-            <slot />
-        </div>
-    </section>
-
-    <slot name="notes" />
+    <script>
+        // The button that opens this lives inside the React island, which knows
+        // nothing about the page around it — so it asks by event rather than by
+        // reaching for an element it should not know exists.
+        const dlg = document.getElementById("tool-about") as HTMLDialogElement | null;
+        if (dlg) {
+            document.addEventListener("laserkit:about", () => {
+                if (!dlg.open) dlg.showModal();
+            });
+            document.getElementById("tool-about-close")?.addEventListener("click", () => dlg.close());
+            // A click on the backdrop lands on the dialog itself, never on its
+            // content — which is how a <dialog> says "outside".
+            dlg.addEventListener("click", e => {
+                if (e.target === dlg) dlg.close();
+            });
+            // The cards fade in on scroll everywhere else on the site; in here
+            // there is nothing to scroll into, so they start visible.
+            dlg.querySelectorAll(".reveal").forEach(el => el.classList.add("is-visible"));
+        }
+    </script>
 </Layout>

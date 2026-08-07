@@ -1,13 +1,6 @@
 ---
 import ToolPage from "../components/ToolPage.astro";
-import Converter from "../components/Converter";
-import { OPERATION_COLORS } from "../lib/dxf";
-
-const operations = [
-    OPERATION_COLORS.FILL_VECTOR_ENGRAVING!,
-    OPERATION_COLORS.VECTOR_ENGRAVING!,
-    OPERATION_COLORS.VECTOR_CUTTING!
-];
+import ConverterTool from "../tools/ConverterTool";
 ---
 
 <ToolPage tool="convert">
@@ -18,16 +11,20 @@ const operations = [
         preserved as separate operations.
     </Fragment>
 
-    <div class="mb-8 flex flex-wrap items-center gap-3">
-        {operations.map(op => (
-            <span class="glass flex items-center gap-2 rounded-full px-4 py-2 text-sm text-slate-300">
-                <span class="size-3 rounded-full shadow-[0_0_12px_2px_var(--tw-shadow-color)]" style={`background:${op.css}; --tw-shadow-color:${op.css}66`}></span>
-                {op.name}
-            </span>
-        ))}
-    </div>
-
-    <Converter client:load />
+    {/* The three operation colours used to be listed here, above the tool. They
+        are on the canvas now — as a legend of the operations this canvas actually
+        uses, rather than all three whether the project has them or not. */}
+    <ConverterTool client:only="react">
+        <div slot="fallback" class="flex h-[100dvh] flex-col bg-[#08090d]">
+            <div class="h-12 shrink-0 border-b border-white/7"></div>
+            <div class="flex min-h-0 flex-1">
+                <div class="hidden w-60 shrink-0 border-r border-white/7 xl:block"></div>
+                <div class="flex-1"></div>
+                <div class="hidden w-76 shrink-0 border-l border-white/7 xl:block"></div>
+            </div>
+            <div class="h-7 shrink-0 border-t border-white/7"></div>
+        </div>
+    </ConverterTool>
 
     <section slot="notes" class="relative px-4 pb-24">
         <div class="mx-auto grid w-[min(72rem,100%)] gap-5 lg:grid-cols-3">
@@ -53,10 +50,11 @@ const operations = [
             <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 220ms">
                 <h2 class="text-lg font-semibold text-white">The settings come too</h2>
                 <p class="mt-2 text-sm leading-relaxed text-slate-400">
-                    Power, speed, passes and density cannot travel inside a DXF or SVG, so they are listed under
-                    the preview along with the machine, material slot, focus and air-assist gears — ready to
-                    re-enter as cut settings. A dropdown converts the table for another laser module by holding
-                    the energy per millimetre constant.
+                    Power, speed, passes and density cannot travel inside a DXF or SVG, so they are listed in the
+                    <strong class="text-slate-300">Laser parameters</strong> panel under the canvas — ready to
+                    re-enter as cut settings. A dropdown converts the whole table for another laser module by
+                    holding the energy per millimetre constant. The machine, material slot, focus and air-assist
+                    gears the project was saved with are in the project panel on the left.
                 </p>
             </article>
         </div>

@@ -75,13 +75,13 @@ export const TOOLS: ToolDef[] = [
         label: "Stamp creator",
         short: "Stamp",
         hint: ".svg / .xcs / .xs → stamp",
-        blurb: "Turn a design into a rubber stamp: the laser removes the background and leaves your artwork standing proud — mirroring included, and the mount, handle and cap cut to match.",
+        blurb: "Turn a design into a rubber stamp: the laser removes the background and leaves your artwork standing proud — mirroring included, and a base plate and handle cut to match.",
         // The universal invert glyph: a circle with one half solid.
         icon: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
         iconFill: "M12 3a9 9 0 0 1 0 18Z",
         accepts: ".svg, .xcs, .xs",
         title: "Stamp creator — turn a design into a laser-cut rubber stamp | LaserKit",
-        description: "Free in-browser stamp maker: invert a vector design so every filled area comes out empty and every empty area filled, on a rectangular, elliptical or round plate, mirrored ready to print. Downloads the base plate, handle discs and cap to go with it. Exports DXF, Falcon Design Space (.fds) and SVG."
+        description: "Free in-browser stamp maker: invert a vector design so every filled area comes out empty and every empty area filled, on a rectangular, elliptical or round plate, mirrored ready to print. Cuts the base plate and a handle — discs, knob, bar or arch — to go with it. Exports DXF, Falcon Design Space (.fds) and SVG."
     }
 ];
 

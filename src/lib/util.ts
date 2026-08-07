@@ -5,16 +5,19 @@ export interface ZipFileEntry {
     file: string;
 }
 
-export async function downloadAsZip(aFiles: ZipFileEntry[], name: string): Promise<void> {
-    const blob = await downloadZip(
+/** Several files as one archive. The caller decides what to do with it. */
+export async function zipBlob(aFiles: ZipFileEntry[]): Promise<Blob> {
+    return downloadZip(
         aFiles.map(o => ({
             name: o.file,
             lastModified: new Date(),
             input: o.blob
         }))
     ).blob();
+}
 
-    downloadBlob(blob, name);
+export async function downloadAsZip(aFiles: ZipFileEntry[], name: string): Promise<void> {
+    downloadBlob(await zipBlob(aFiles), name);
 }
 
 export function downloadBlob(blob: Blob, name: string): void {

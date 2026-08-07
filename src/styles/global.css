@@ -1,20 +1,68 @@
 @import "tailwindcss";
 
+/* ===================================================================== */
+/* Design tokens                                                          */
+/*                                                                        */
+/* Two surfaces live in this file and they are deliberately different.    */
+/*                                                                        */
+/*  · The *site* — landing page, the explainer notes under each tool — is */
+/*    the marketing surface: gradients, glow, floating blobs.             */
+/*  · The *workspace* — toolbar, sidebar, stage, inspector — is the app   */
+/*    surface: flat, quiet, near-monochrome, so that the only saturated   */
+/*    thing on screen is the drawing itself and the one primary action.   */
+/*                                                                        */
+/* Mixing the two is what made the old UI feel busy, so the workspace     */
+/* tokens below never use a gradient and only ever reach for the accent   */
+/* on something that is selected or about to be clicked.                  */
+/* ===================================================================== */
+
 @theme {
-    --color-surface: #07070f;
-    --color-surface-raised: #0d0d1a;
+    /* — workspace surfaces, darkest to lightest ————————————————— */
+    --color-background: #08090d;
+    --color-panel: #0e1016;
+    --color-panel-2: #14161f;
+    --color-elevated: #1b1e29;
+
+    /* — text ————————————————————————————————————————————————— */
+    --color-foreground: #e9ebf2;
+    --color-muted-foreground: #878da0;
+    --color-subtle-foreground: #5f6577;
+
+    /* — lines ———————————————————————————————————————————————— */
+    --color-line: oklch(1 0 0 / 7%);
+    --color-line-strong: oklch(1 0 0 / 13%);
+
+    /* — accents ——————————————————————————————————————————————— */
     --color-accent: #22d3ee;
     --color-accent-2: #8b5cf6;
     --color-accent-3: #e879f9;
     --color-laser: #ff2d55;
+    --color-warn: #fbbf24;
+    --color-danger: #fb7185;
+    --color-ok: #34d399;
+
+    /* — legacy marketing surfaces (landing page, notes) ——————————— */
+    --color-surface: #07070f;
+    --color-surface-raised: #0d0d1a;
 
     --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+    /* — chrome metrics, so every panel agrees without magic numbers ——— */
+    --spacing-toolbar: 3rem;      /* 48px */
+    --spacing-statusbar: 1.75rem; /* 28px */
+    --spacing-sidebar: 14rem;     /* 224px */
+    --spacing-inspector: 17rem;   /* 272px */
+    --spacing-ruler: 1.25rem;     /* 20px */
+
+    --radius-panel: 0.75rem;
 
     --animate-float-slow: float 14s ease-in-out infinite;
     --animate-float-slower: float 20s ease-in-out infinite reverse;
     --animate-laser-sweep: laser-sweep 4.5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
     --animate-pulse-glow: pulse-glow 3s ease-in-out infinite;
-    --animate-marquee-y: marquee-y 1.6s linear infinite;
+    --animate-in-fade: in-fade 0.14s ease-out;
+    --animate-in-pop: in-pop 0.14s cubic-bezier(0.22, 1, 0.36, 1);
 
     @keyframes float {
         0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
@@ -34,9 +82,14 @@
         50%      { opacity: 1; }
     }
 
-    @keyframes marquee-y {
-        0%   { background-position-y: 0; }
-        100% { background-position-y: 16px; }
+    @keyframes in-fade {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+
+    @keyframes in-pop {
+        from { opacity: 0; transform: scale(0.97) translateY(-2px); }
+        to   { opacity: 1; transform: none; }
     }
 }
 
@@ -49,22 +102,163 @@ html {
 }
 
 body {
-    background-color: var(--color-surface);
-    color: #e5e7eb;
+    background-color: var(--color-background);
+    color: var(--color-foreground);
     font-family: var(--font-sans);
     overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* A tool page *is* an app: it is exactly one screen tall and never scrolls.
+   Set by the layout only, so the landing page keeps scrolling normally. */
+html.app-shell,
+html.app-shell body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    scroll-behavior: auto;
 }
 
 ::selection {
-    background: color-mix(in srgb, var(--color-accent-2) 60%, transparent);
+    background: color-mix(in srgb, var(--color-accent-2) 55%, transparent);
     color: white;
 }
 
+/* One focus ring for the whole app — visible, never doubled up. */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--color-accent) 70%, transparent);
+    outline-offset: 1px;
+    border-radius: 0.375rem;
+}
+
+/*
+ * Panel scrollbars, the way an app does them: invisible at rest, there the
+ * moment you go near them.
+ *
+ * A permanent 8 px gutter down the side of a 224 px panel is a stripe of chrome
+ * that is doing nothing 95 % of the time, and two of them frame the drawing —
+ * which is precisely what the drawing was supposed to be free of. The thumb is
+ * transparent until the panel is hovered or something inside it has focus, so
+ * the affordance is still there for anyone reaching for it, and keyboard
+ * scrolling never loses it.
+ */
+.scroll-slim {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.15s ease;
+}
+.scroll-slim:hover,
+.scroll-slim:focus-within {
+    scrollbar-color: oklch(1 0 0 / 14%) transparent;
+}
+.scroll-slim::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll-slim::-webkit-scrollbar-track { background: transparent; }
+.scroll-slim::-webkit-scrollbar-thumb {
+    background: transparent;
+    border: 2px solid transparent;
+    background-clip: content-box;
+    border-radius: 99px;
+}
+.scroll-slim:hover::-webkit-scrollbar-thumb,
+.scroll-slim:focus-within::-webkit-scrollbar-thumb {
+    background-color: oklch(1 0 0 / 16%);
+}
+.scroll-slim::-webkit-scrollbar-thumb:hover { background-color: oklch(1 0 0 / 28%); }
+
 /* ------------------------------------------------------------------ */
-/* Reusable fancy bits                                                 */
+/* Workspace: the "how this tool works" overlay                        */
 /* ------------------------------------------------------------------ */
 
-/* Faint blueprint grid over the page background */
+/*
+ * A real <dialog>, so Escape, the backdrop and the focus trap are the
+ * platform's job rather than ours. It is in the page's HTML from the start —
+ * the explainer copy is what a lot of this site's search traffic arrives for,
+ * and burying it behind a fetch would take it off the page for good.
+ */
+#tool-about {
+    /* Tailwind's preflight zeroes the margin on every element, which takes the
+       UA stylesheet's `margin: auto` with it and drops a modal <dialog> in the
+       top-left corner. Both are restored here, so it sits in the middle. */
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    width: fit-content;
+    height: fit-content;
+    max-width: min(72rem, calc(100vw - 3rem));
+    max-height: min(48rem, calc(100dvh - 4rem));
+    border: 1px solid var(--color-line-strong);
+    border-radius: 1rem;
+    background: var(--color-panel);
+    color: var(--color-foreground);
+    padding: 0;
+    overflow: hidden;
+}
+#tool-about::backdrop {
+    background: rgb(0 0 0 / 0.6);
+    backdrop-filter: blur(3px);
+}
+#tool-about[open] {
+    animation: in-pop 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/*
+ * The explainer cards were written for a full-width page, and their column
+ * counts are viewport media queries (`lg:grid-cols-4`) — which stay at four
+ * inside a 1000 px dialog on a 1920 px screen, giving four ribbons of text one
+ * word wide. Overridden here rather than page by page: the copy should not have
+ * to know where it is being shown.
+ */
+#tool-about .grid {
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+/* …and the page padding those sections carried is the dialog's job now. */
+#tool-about #tool-notes > section {
+    padding: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Workspace: the stage                                                */
+/* ------------------------------------------------------------------ */
+
+/*
+ * The paper the drawing sits on. The grid is drawn in *screen* pixels from
+ * a size the stage recomputes as you zoom, so one square is always a round
+ * number of millimetres — which is the whole point of a grid on a laser bed.
+ */
+.stage-paper {
+    background-color: #ffffff;
+    background-image:
+        linear-gradient(to right, rgb(15 23 42 / 0.06) 1px, transparent 1px),
+        linear-gradient(to bottom, rgb(15 23 42 / 0.06) 1px, transparent 1px),
+        linear-gradient(to right, rgb(15 23 42 / 0.14) 1px, transparent 1px),
+        linear-gradient(to bottom, rgb(15 23 42 / 0.14) 1px, transparent 1px);
+    background-size:
+        var(--grid-minor, 10px) var(--grid-minor, 10px),
+        var(--grid-minor, 10px) var(--grid-minor, 10px),
+        var(--grid-major, 50px) var(--grid-major, 50px),
+        var(--grid-major, 50px) var(--grid-major, 50px);
+    background-position: var(--grid-x, 0) var(--grid-y, 0);
+}
+.stage-paper[data-grid="off"] {
+    background-image: none;
+}
+.stage-paper svg {
+    display: block;
+}
+
+/* The old preview surface, still used by the notes/marketing shots. */
+.preview-grid {
+    background-color: white;
+    background-image:
+        linear-gradient(to right, rgb(203 213 225 / 0.55) 1px, transparent 1px),
+        linear-gradient(to bottom, rgb(203 213 225 / 0.55) 1px, transparent 1px);
+    background-size: 26px 26px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Marketing surface (landing page + the notes under each tool)        */
+/* ------------------------------------------------------------------ */
+
 .bg-blueprint {
     background-image:
         linear-gradient(to right, rgb(255 255 255 / 0.035) 1px, transparent 1px),
@@ -73,7 +267,6 @@ body {
     mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 40%, transparent 100%);
 }
 
-/* Gradient headline text */
 .text-gradient {
     background: linear-gradient(100deg, var(--color-accent) 0%, var(--color-accent-2) 55%, var(--color-accent-3) 100%);
     background-clip: text;
@@ -81,14 +274,12 @@ body {
     color: transparent;
 }
 
-/* Glass card */
 .glass {
     background: rgb(255 255 255 / 0.04);
     border: 1px solid rgb(255 255 255 / 0.09);
     backdrop-filter: blur(14px);
 }
 
-/* Card with animated gradient border on hover */
 .glow-card {
     position: relative;
     transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s;
@@ -100,7 +291,6 @@ body {
         0 0 0 1px rgb(255 255 255 / 0.14) inset;
 }
 
-/* Scroll reveal (activated by the IntersectionObserver in Layout.astro) */
 .reveal {
     opacity: 0;
     transform: translateY(26px);
@@ -112,7 +302,6 @@ body {
     transform: none;
 }
 
-/* Laser beam that sweeps across its (relative, overflow-hidden) parent */
 .laser-beam {
     position: absolute;
     top: 0;
@@ -125,21 +314,10 @@ body {
     animation: var(--animate-laser-sweep);
 }
 
-/* White work-area behind the converted SVG preview */
-.preview-grid {
-    background-color: white;
-    background-image:
-        linear-gradient(to right, rgb(203 213 225 / 0.55) 1px, transparent 1px),
-        linear-gradient(to bottom, rgb(203 213 225 / 0.55) 1px, transparent 1px);
-    background-size: 26px 26px;
-}
-.preview-grid svg {
-    display: block;
-}
-
 @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
     .laser-beam,
     [class*="animate-"] { animation: none !important; }
     .reveal { opacity: 1; transform: none; transition: none; }
+    * { transition-duration: 0.01ms !important; }
 }

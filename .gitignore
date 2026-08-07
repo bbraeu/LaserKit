@@ -25,3 +25,7 @@ dist-ssr
 
 # Astro
 .astro
+
+# Tests
+test-results
+playwright-report

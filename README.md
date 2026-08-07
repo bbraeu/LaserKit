@@ -42,16 +42,16 @@ where geometry becomes a DXF, an `.fds` or an SVG.
 ### Passing work between tools
 
 The tools chain in real work — trace a logo into vectors, *then* make a stamp of
-it — so **Send to other tool** hands the current result straight to the next tool
-instead of routing it through the download folder. The sender puts its own SVG
-output into `sessionStorage` and navigates; the receiver picks it up on load and
-feeds it to the very same reader a dropped file goes through, showing *handed over
-from …* next to the file name (`src/lib/handoff.ts`, `src/components/SendTo.tsx`).
+it — so **Send to** hands the current result straight to the next tool instead of
+routing it through the download folder. The sender puts its own SVG output into
+`sessionStorage` and navigates; the receiver picks it up on load and feeds it to
+the very same reader a dropped file goes through, showing *from …* under the file
+name (`src/lib/handoff.ts`, `src/workspace/SendToMenu.tsx`).
 
-It sits in its own row directly under the preview, closed off by a rule, and is
-styled as a quiet cyan link with an arrow rather than as a button — it saves
-nothing and navigates. The controls that *do* write a file all carry a tray arrow
-and stay together in the panel header, out of its way.
+It sits in the toolbar beside Export, because both are outputs of the document —
+but outlined in the accent rather than filled with it, and carrying a share arrow
+rather than a tray arrow. Export writes a file and ends the job; this one saves
+nothing and moves you somewhere else, and it has to look it.
 
 The payload is always an SVG in millimetres, which is what every tool that takes
 a design already reads, so the receiving end needs to know nothing about where it
@@ -134,12 +134,14 @@ inlays and any "engrave the background" job.
   of that box, or a circle reaching its far corner. Whether the artwork actually
   fits inside a rounded or elliptical plate is asked point by point, in closed
   form, and said out loud when it does not.
-- **Or name the size** — *Set the stamp size* turns it around: the plate is
-  exactly the millimetres you type and the design is scaled to fit inside it,
-  margin and proportions kept, because "a 40 × 15 mm stamp" is a thing you order
-  while "a design plus 3 mm" is not. `fitScale()` is the closed-form inverse of
-  each of the three plate constructions, so a size taken off the current plate
-  comes back as exactly 1 and ticking the box moves nothing.
+- **Naming the size is the default** — *Set the size*, 50 mm wide, with the
+  height following the design's own proportions until you type one over it. The
+  plate comes out exactly the millimetres you asked for and the design is scaled
+  to fit inside it, margin and proportions kept, because "a 40 × 15 mm stamp" is a
+  thing you order while "a design plus 3 mm" is not. Retyping the size refits the
+  canvas to it. `fitScale()` is the closed-form inverse of each of the three plate
+  constructions, so a size taken off the current plate comes back as exactly 1 and
+  switching the toggle moves nothing.
 - **Mirroring** flips the design about its own centre, leaving the plate where it
   was — a stamp prints back-to-front, so it has to be engraved that way.
 - **Overlaps are checked for.** Alternating fill is the design's own meaning only
@@ -148,16 +150,20 @@ inlays and any "engrave the background" job.
   solid piece. Ring pairs whose boxes meet without one holding the other are
   tested for real edge crossings (`segsCross`, budget-capped) and the warning names
   the fix: union them first.
-- Optionally repeats the plate's edge in cutting red, so one file both engraves the
-  background and frees the piece from the sheet.
-- **The parts around the stamp** (`Download base stamp objects`, `src/lib/stamp.ts`)
-  come off the plate's own parameters, so a round stamp gives true circles and a
-  rounded rectangle keeps its corner radius — exactly, at any size. One SVG sheet
-  in millimetres, cut lines red and the handle's glue position in engraving green:
-  a **base plate** the size of the whole stamp with a ⌀ 15 mm circle engraved at
-  its centre, **five ⌀ 15 mm discs** that stack into the handle, a **cap lid** 2 mm
-  larger all round, and **two rings** of that outer size with a 1 mm wall — glued
-  under the lid they make a cap the stamp slides into with 1 mm of play.
+- Repeats the plate's edge in cutting red by default, so one file both engraves
+  the background and frees the piece from the sheet.
+- **The handle** (*Handle & parts* tab, `src/lib/stamp.ts`) comes off the plate's
+  own parameters, so a round stamp gives true circles and a rounded rectangle
+  keeps its corner radius — exactly, at any size. One SVG sheet in millimetres,
+  cut lines red and the glue positions in engraving green: a **base plate** the
+  size of the whole stamp with the handle's footprint engraved on it, plus one of
+  four grips — a **disc** stack, a graded **knob**, a **bar** across the back, or
+  an **arch** of two uprights and a grip bar you get your fingers under. A laser
+  builds a 3D grip the only way it can, in layers, so the sheet thickness decides
+  how many pieces a 20 mm grip takes (seven of 3 mm ply, three of 6 mm acrylic) —
+  and layers, diameter, bar length and upright height are all then adjustable.
+  The sheet is previewed in its own tab under the canvas, pannable and zoomable
+  like the workbench itself.
 
 ## Trace
 
@@ -248,8 +254,8 @@ versions store just the numeric id from their online catalogue, so `Material
   the result back out to a polyline.
 - **Trace** (`src/lib/trace.ts`): threshold → boundary decomposition by
   trace-and-flip (or thinning, for centrelines) → Douglas–Peucker → per-corner
-  curve fitting. Split into `prepareTrace` and `buildTrace` so that dragging Glätte
-  or Optimieren re-fits curves to an already-decomposed bitmap instead of
+  curve fitting. Split into `prepareTrace` and `buildTrace` so that dragging Smooth
+  or Optimize re-fits curves to an already-decomposed bitmap instead of
   re-thresholding two million pixels.
 - **Stamp** (`src/lib/invert.ts`, `src/lib/stamp.ts`): ring nesting depth, a
   closed-form plate, and one even-odd path. DXF has no fills, so every ring goes out as a closed contour
@@ -257,22 +263,76 @@ versions store just the numeric id from their online catalogue, so `Material
   which is how LightBurn, Falcon and xTool fill nested contours anyway; an `.fds`
   shape is a QPainterPath, whose default rule is odd-even.
 
+## The workspace
+
+Every tool runs inside one shell (`src/workspace/`), laid out the way a design app
+is:
+
+```
++---------------------------------------------------------------+
+| Toolbar    New . Open . Undo/Redo . Send to . Export           |
++-----------+---------------------------------------+-----------+
+|           |                                       |           |
+| Sidebar   |               Stage                   | Inspector |
+|  "what"   |     the drawing, rulers, grid         |   "how"   |
+|           |                                       |           |
++-----------+---------------------------------------+-----------+
+| Statusbar  size . points . accuracy . notes . zoom             |
++---------------------------------------------------------------+
+```
+
+One rule decides where a control goes. **Left** answers *which thing* — which
+file, which canvas, which preset, which step of your own history. **Right**
+answers *how* — every property of the drawing, and nothing global. **Top** is
+what is true of the document at any moment, including everything it can write.
+**Bottom** is what the tool worked out. Nothing appears in two of them.
+
+- `Workspace.tsx` composes the regions and owns the keyboard shortcuts
+  (`Ctrl+Z` / `Ctrl+Shift+Z` / `Ctrl+O`, `0` to fit, `+` / `-` to zoom).
+- `hooks/useDocumentSource.ts` — the open file: one document per canvas, which
+  one is current, busy/error, and the hand-over pickup. One copy, four tools.
+- `hooks/useHistoryParams.ts` — a tool's settings as one object with a past and a
+  future. A slider drag coalesces into a single undo step; settings marked
+  *transient* belong to the open file and are the only ones a new file resets and
+  the only ones never persisted to `localStorage`.
+- `hooks/useDebouncedBuild.ts` — the debounced rebuild, publishing the result and
+  its fit key in one state update so the view can never refit to the drawing on
+  its way out.
+- `hooks/usePanZoom.ts` — pan and zoom written straight onto the SVG element.
+  Nothing re-renders while you drag: the rulers, the grid and the readouts
+  subscribe through one rAF-throttled callback and update imperatively.
+- `rulers.ts` — millimetre spacing off the 1-2-5 ladder, so one grid square is
+  always a round number of millimetres at any zoom.
+
+UI primitives are shadcn/ui components in `src/components/ui/` (Radix + CVA), with
+Lucide icons.
+
+A tool page is the workspace and nothing else: exactly one screen, no page
+scroll. Each page still carries its own heading, lead and explainer cards — in a
+server-rendered `<dialog>` opened by **How this tool works** at the foot of the
+left panel, so the copy is still in the HTML for crawlers while the tool is what
+meets you. Panel scrollbars are transparent until the panel is hovered or
+focused, so neither one frames the drawing when nothing is scrolling.
+
 ## Stack
 
 [Astro](https://astro.build) + React (one island per tool) + Tailwind CSS v4,
 written in TypeScript. Deployed to GitHub Pages via `.github/workflows/static.yml`.
 
-Runtime dependencies are deliberately few: `fflate` and `client-zip` for the ZIP
-formats, and `skeleton-tracing-js` (MIT) for centreline thinning. Everything else —
-DXF, FDS, contour offsetting, inversion, outline tracing — is in `src/lib`.
+Runtime dependencies: `fflate` and `client-zip` for the ZIP formats,
+`skeleton-tracing-js` (MIT) for centreline thinning, and Radix UI + Lucide behind
+the shadcn/ui components. Everything else — DXF, FDS, contour offsetting,
+inversion, outline tracing — is in `src/lib`.
 
 ## Development
 
 ```sh
 pnpm install
-pnpm dev       # local dev server
-pnpm check     # typecheck (astro check)
-pnpm build     # production build to dist/
+pnpm dev          # local dev server
+pnpm check        # typecheck (astro check)
+pnpm build        # production build to dist/
+pnpm test         # unit tests (vitest)
+pnpm test:e2e     # end-to-end (playwright; builds and previews first)
 ```
 
 `pnpm check` is not run by CI — run it by hand before pushing.

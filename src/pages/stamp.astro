@@ -1,17 +1,27 @@
 ---
 import ToolPage from "../components/ToolPage.astro";
-import Inverter from "../components/Inverter";
+import StampTool from "../tools/StampTool";
 ---
 
 <ToolPage tool="stamp">
     <Fragment slot="lead">
         Swap filled and empty: every area your design covers comes out <strong class="text-slate-300">untouched</strong>,
         and everything around it comes out <strong class="text-slate-300">engraved away</strong> — so the artwork
-        stands proud of the plate. That is what a rubber stamp needs; the mount, handle and cap to go around it
-        come out of the same page. It makes stencils, inlays and any "engrave the background" job too.
+        stands proud of the plate. That is what a rubber stamp needs; the base plate and the handle to go with it
+        come off the same page. It makes stencils, inlays and any "engrave the background" job too.
     </Fragment>
 
-    <Inverter client:load />
+    <StampTool client:only="react">
+        <div slot="fallback" class="flex h-[100dvh] flex-col bg-[#08090d]">
+            <div class="h-12 shrink-0 border-b border-white/7"></div>
+            <div class="flex min-h-0 flex-1">
+                <div class="hidden w-60 shrink-0 border-r border-white/7 xl:block"></div>
+                <div class="flex-1"></div>
+                <div class="hidden w-76 shrink-0 border-l border-white/7 xl:block"></div>
+            </div>
+            <div class="h-7 shrink-0 border-t border-white/7"></div>
+        </div>
+    </StampTool>
 
     <section slot="notes" class="relative px-4 pb-24">
         <div class="mx-auto w-[min(72rem,100%)]">
@@ -29,17 +39,17 @@ import Inverter from "../components/Inverter";
                     <h2 class="text-lg font-semibold text-white">Mirror it for a stamp</h2>
                     <p class="mt-2 text-sm leading-relaxed text-slate-400">
                         A stamp prints what touches the paper, so it has to be engraved back-to-front or the text
-                        comes out reversed. Pick <strong class="text-slate-300">Mirror ↔</strong> and the design
+                        comes out reversed. Set <strong class="text-slate-300">Orientation</strong> to <strong class="text-slate-300">Mirror ↔</strong> and the design
                         flips about its own centre — the plate stays exactly where it was.
                     </p>
                 </article>
                 <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 220ms">
                     <h2 class="text-lg font-semibold text-white">Name the size</h2>
                     <p class="mt-2 text-sm leading-relaxed text-slate-400">
-                        Tick <strong class="text-slate-300">Set the stamp size</strong> and it works the other way
+                        The stamp opens at a size you name — <strong class="text-slate-300">Set the size</strong>, 50 mm wide by default, with the height following the design’s own proportions. It works the other way
                         round: the stamp comes out exactly the millimetres you type, and the design is scaled to fit
                         inside it with the margin kept and its proportions untouched. The parts sheet follows the
-                        size you set, so mount, handle and cap always match.
+                        size you set, so the base plate and the handle always match.
                     </p>
                 </article>
                 <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 330ms">
@@ -54,44 +64,58 @@ import Inverter from "../components/Inverter";
             </div>
 
             <div class="glass reveal mt-5 rounded-2xl p-6">
-                <h2 class="text-lg font-semibold text-white">The parts around the stamp</h2>
+                <h2 class="text-lg font-semibold text-white">The handle</h2>
                 <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
-                    <strong class="text-slate-300">Download base stamp objects</strong> writes one SVG sheet of
-                    everything the engraved face still needs, cut to this stamp's own outline — cut lines in red,
-                    the handle's glue position in engraving green. Cut it from 3–4 mm plywood or acrylic and glue
-                    the stack together.
+                    An engraved face is not a stamp until you can press it. The
+                    <strong class="text-slate-300">Handle &amp; parts</strong> tab under the canvas previews the sheet
+                    that goes with it — cut lines in red, the glue positions in engraving green — and the
+                    <strong class="text-slate-300">Stamp parts sheet</strong> button in the toolbar writes it. Cut it
+                    from plywood or acrylic; the engraved face itself wants rubber.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    A laser makes a three-dimensional grip the only way it can: in layers. So the
+                    <strong class="text-slate-300">sheet thickness</strong> decides how many pieces a 20 mm grip
+                    takes — seven of 3 mm plywood, three of 6 mm acrylic — and every number is then yours to change:
+                    layers, diameter, bar length, upright height.
                 </p>
                 <dl class="mt-4 grid gap-4 text-sm leading-relaxed sm:grid-cols-2 lg:grid-cols-4">
                     <div>
-                        <dt class="font-semibold text-slate-200">Base plate</dt>
+                        <dt class="font-semibold text-slate-200">Discs</dt>
                         <dd class="mt-1 text-slate-400">
-                            The exact size of the stamp's outer contour — the whole plate, not just the artwork on
-                            it — so the face glues on edge for edge. A ⌀ 15 mm circle is engraved at its centre,
-                            marking where the handle goes.
+                            A plain stack of ⌀ 15 mm circles glued into a knob. The quickest to cut and the easiest
+                            to glue straight, because every layer is the same.
                         </dd>
                     </div>
                     <div>
-                        <dt class="font-semibold text-slate-200">Handle</dt>
+                        <dt class="font-semibold text-slate-200">Knob</dt>
                         <dd class="mt-1 text-slate-400">
-                            Five ⌀ 15 mm discs. Glue them into a stack on that engraved circle and the stamp has a
-                            knob to press with, one material thickness per disc.
+                            The same stack with the diameters graded from the base up, so it domes into something
+                            that fits the pad of a thumb rather than a cylinder that digs into it.
                         </dd>
                     </div>
                     <div>
-                        <dt class="font-semibold text-slate-200">Cap lid</dt>
+                        <dt class="font-semibold text-slate-200">Bar</dt>
                         <dd class="mt-1 text-slate-400">
-                            The same outline 2 mm larger all round — the top of the cap that keeps a wet stamp off
-                            everything else.
+                            A rounded bar across the back, the shape an office stamp has. It starts at 70 % of the
+                            stamp's width — a long plate that one knob presses unevenly comes down flat.
                         </dd>
                     </div>
                     <div>
-                        <dt class="font-semibold text-slate-200">Cap rings</dt>
+                        <dt class="font-semibold text-slate-200">Arch</dt>
                         <dd class="mt-1 text-slate-400">
-                            Two of that outer size with a 1 mm wall. Glued under the lid they form the cap's cavity,
-                            two material thicknesses deep, and the stamp slides in with 1 mm of play.
+                            Two uprights glued on edge with a grip bar across their tops, so your fingers go
+                            <em>under</em> the handle. The only one whose height is its own rather than a multiple of
+                            the sheet.
                         </dd>
                     </div>
                 </dl>
+                <p class="mt-4 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    The <strong class="text-slate-300">base plate</strong> comes with all of them: the exact size of
+                    the stamp's outer contour — the whole plate, not just the artwork on it — so the face glues on
+                    edge for edge, with the handle's footprint engraved on it to glue against. Pick
+                    <strong class="text-slate-300">None</strong> and that is the only part you get, for a face going
+                    into a mount you already own.
+                </p>
             </div>
 
             <div class="glass reveal mt-5 rounded-2xl p-6">

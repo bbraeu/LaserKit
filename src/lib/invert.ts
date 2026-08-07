@@ -115,23 +115,6 @@ export type FrameSpec =
 export const frameRing = (o: FrameSpec): Point[] =>
     o.shape === "rect" ? rectRing(o.box, o.radius) : ellipseRing(o.cx, o.cy, o.rx, o.ry);
 
-/**
- * The same plate, d mm further out on every side.
- *
- * A sharp corner offsets to a sharp corner; a rounded one keeps its arc centre,
- * so its radius grows with the offset. An ellipse's true offset is not an ellipse
- * — its semi-axes are grown instead, which is exact at the four axis points and
- * within a few percent of d in between.
- */
-export const growFrame = (o: FrameSpec, d: number): FrameSpec =>
-    o.shape === "rect"
-        ? {
-            shape: "rect",
-            box: { x0: o.box.x0 - d, y0: o.box.y0 - d, x1: o.box.x1 + d, y1: o.box.y1 + d },
-            radius: o.radius > 0 ? Math.max(0, o.radius + d) : 0
-        }
-        : { shape: "round", cx: o.cx, cy: o.cy, rx: o.rx + d, ry: o.ry + d };
-
 /** Centre of the plate — where a handle belongs. */
 export const frameCentre = (o: FrameSpec): Point =>
     o.shape === "rect"

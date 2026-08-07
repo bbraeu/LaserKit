@@ -8,9 +8,17 @@ interface Props {
     description: string;
     /** id of the tool this page *is*, so the header can mark it as current */
     tool?: string;
+    /**
+     * "site" is the marketing surface: floating nav, gradient blobs, a footer.
+     * "app" is a tool page, where the workspace's own toolbar *is* the header —
+     * a second nav bar over an app that already has one is the sort of thing
+     * that made the old tool pages feel like a landing page with a widget on it.
+     */
+    chrome?: "site" | "app";
 }
 
-const { title, description, tool } = Astro.props;
+const { title, description, tool, chrome = "site" } = Astro.props;
+const isApp = chrome === "app";
 const base = import.meta.env.BASE_URL;
 const isProd = import.meta.env.PROD;
 
@@ -28,7 +36,7 @@ const GA_MEASUREMENT_ID = "G-79BWTBS409";
 ---
 
 <!doctype html>
-<html lang="en" class="scroll-pt-24">
+<html lang="en" class:list={[isApp ? "app-shell" : "scroll-pt-24"]}>
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -67,16 +75,22 @@ const GA_MEASUREMENT_ID = "G-79BWTBS409";
         </>
     )}
 </head>
-<body class="relative min-h-screen antialiased">
-    <!-- Decorative background: blueprint grid + floating gradient blobs -->
-    <div class="pointer-events-none fixed inset-0 -z-10" aria-hidden="true">
-        <div class="bg-blueprint absolute inset-0"></div>
-        <div class="absolute -top-40 -left-40 size-144 rounded-full bg-cyan-500/20 blur-[120px] animate-float-slow"></div>
-        <div class="absolute top-1/3 -right-52 size-160 rounded-full bg-violet-600/20 blur-[130px] animate-float-slower"></div>
-        <div class="absolute -bottom-64 left-1/3 size-152 rounded-full bg-fuchsia-500/10 blur-[140px] animate-float-slow"></div>
-    </div>
+<body class:list={["relative antialiased", isApp ? "" : "min-h-screen"]}>
+    <!-- Decorative background: blueprint grid + floating gradient blobs.
+         Never on a tool page: three 120 px blurs repainting behind an app the
+         user is dragging a 40 000-point contour around in is a cost paid for
+         nothing, since the workspace covers all of it. -->
+    {!isApp && (
+        <div class="pointer-events-none fixed inset-0 -z-10" aria-hidden="true">
+            <div class="bg-blueprint absolute inset-0"></div>
+            <div class="absolute -top-40 -left-40 size-144 rounded-full bg-cyan-500/20 blur-[120px] animate-float-slow"></div>
+            <div class="absolute top-1/3 -right-52 size-160 rounded-full bg-violet-600/20 blur-[130px] animate-float-slower"></div>
+            <div class="absolute -bottom-64 left-1/3 size-152 rounded-full bg-fuchsia-500/10 blur-[140px] animate-float-slow"></div>
+        </div>
+    )}
 
     <!-- Nav -->
+    {!isApp && (
     <header class="fixed inset-x-0 top-0 z-50">
         <nav class="glass mx-auto mt-4 flex w-[min(72rem,calc(100%-2rem))] items-center justify-between gap-3 rounded-2xl px-5 py-3">
             <a href={base} class="flex shrink-0 items-center gap-2.5 font-bold text-white">
@@ -129,11 +143,16 @@ const GA_MEASUREMENT_ID = "G-79BWTBS409";
             </a>
         </nav>
     </header>
+    )}
 
     <main id="top">
         <slot />
     </main>
 
+    <!-- On an app page the credits and the cookie link live at the foot of the
+         "how this tool works" overlay instead: a footer below a workspace that
+         fills the screen is a footer nobody can reach. -->
+    {!isApp && (
     <footer class="border-t border-white/5 py-10">
         <div class="mx-auto flex w-[min(72rem,calc(100%-2rem))] flex-col items-center gap-3 text-center">
             <p class="text-sm text-slate-400">
@@ -146,6 +165,7 @@ const GA_MEASUREMENT_ID = "G-79BWTBS409";
             </button>
         </div>
     </footer>
+    )}
 
     {isProd && GA_MEASUREMENT_ID && (
         <>

@@ -1,6 +1,6 @@
 ---
 import ToolPage from "../components/ToolPage.astro";
-import Outliner from "../components/Outliner";
+import ContourTool from "../tools/ContourTool";
 ---
 
 <ToolPage tool="contour">
@@ -10,7 +10,17 @@ import Outliner from "../components/Outliner";
         the outline is traced around exactly what would be cut.
     </Fragment>
 
-    <Outliner client:load />
+    <ContourTool client:only="react">
+        <div slot="fallback" class="flex h-[100dvh] flex-col bg-[#08090d]">
+            <div class="h-12 shrink-0 border-b border-white/7"></div>
+            <div class="flex min-h-0 flex-1">
+                <div class="hidden w-60 shrink-0 border-r border-white/7 xl:block"></div>
+                <div class="flex-1"></div>
+                <div class="hidden w-76 shrink-0 border-l border-white/7 xl:block"></div>
+            </div>
+            <div class="h-7 shrink-0 border-t border-white/7"></div>
+        </div>
+    </ContourTool>
 
     <section slot="notes" class="relative px-4 pb-24">
         <div class="mx-auto grid w-[min(72rem,100%)] gap-5 lg:grid-cols-3">
@@ -18,7 +28,7 @@ import Outliner from "../components/Outliner";
                 <h2 class="text-lg font-semibold text-white">Items, not shapes</h2>
                 <p class="mt-2 text-sm leading-relaxed text-slate-400">
                     Every subpath is treated as a ring, and a ring is an <strong class="text-slate-300">item</strong> when no other ring contains it. Holes and inner detail therefore drop out by themselves, and
-                    things standing side by side come out as separate items — trace all of them, or switch to <em>individual</em> and click the ones you want.
+                    things standing side by side come out as separate items — trace all of them, or switch the selection to <em>Pick items</em> and click the ones you want on the canvas.
                 </p>
             </article>
             <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 110ms">
