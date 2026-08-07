@@ -2,6 +2,7 @@
 import "../styles/global.css";
 import ToolIcon from "../components/ToolIcon.astro";
 import { TOOLS } from "../lib/tools";
+import { LATEST } from "../lib/releases";
 
 interface Props {
     title: string;
@@ -134,6 +135,12 @@ const GA_MEASUREMENT_ID = "G-79BWTBS409";
                     </div>
                 </details>
 
+                <a href={`${base}releases/`}
+                   aria-current={Astro.url.pathname.endsWith("/releases/") ? "page" : undefined}
+                   class:list={[
+                       "hidden rounded-lg px-3 py-2 text-sm transition hover:bg-white/5 hover:text-white sm:block",
+                       Astro.url.pathname.endsWith("/releases/") ? "bg-white/10 text-white" : "text-slate-300"
+                   ]}>Releases</a>
                 <a href={`${base}#credits`} class="hidden rounded-lg px-3 py-2 text-sm text-slate-300 transition hover:bg-white/5 hover:text-white sm:block">Credits</a>
             </div>
 
@@ -160,6 +167,9 @@ const GA_MEASUREMENT_ID = "G-79BWTBS409";
                 · based on <a href="https://nanovsky.github.io/XCStoSVG/" target="_blank" rel="noopener" class="font-medium text-slate-200 underline decoration-violet-400/50 underline-offset-4 transition hover:text-violet-300">XCStoSVG by Daniel Nanovski</a>
             </p>
             <p class="text-xs text-slate-500">Files never leave your computer — every tool runs entirely in your browser.</p>
+            <p class="text-xs text-slate-500">
+                <a href={`${base}releases/`} class="underline decoration-slate-600 underline-offset-2 transition hover:text-slate-300">v{LATEST.version} — what changed</a>
+            </p>
             <button id="cookie-settings" class="text-xs text-slate-500 underline decoration-slate-600 underline-offset-2 transition hover:text-slate-300">
                 Cookie settings
             </button>
