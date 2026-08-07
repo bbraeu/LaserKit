@@ -30,6 +30,20 @@ export const REPO = "https://github.com/bbraeu/LaserKit";
 
 export const RELEASES: Release[] = [
     {
+        version: "3.7.0",
+        date: "2026-08-07",
+        title: "The maze generator",
+        tools: ["maze"],
+        notes: [
+            "New tool. A perfect maze at any size — exactly one route between any two points, no loops, no unreachable corners.",
+            "The walls are engraved and only the outline is cut, and there is no switch to change that: a wall is a line, and cutting a line gives a slot with nothing holding either side of it.",
+            "A seed, because without one dragging the corridor width would reshuffle every wall and the maze on screen would never be the maze you exported.",
+            "The way through is drawn on the canvas as a reading aid and is in no export — engraving the answer onto the puzzle would be a strange thing to hand somebody.",
+            "Loops are offered and labelled for what they do: they look harder and solve easier.",
+            "Collinear walls are merged into one line each, which on a big maze more than halves the job."
+        ]
+    },
+    {
         version: "3.6.0",
         date: "2026-08-07",
         title: "This page",

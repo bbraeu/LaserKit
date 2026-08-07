@@ -94,6 +94,19 @@ export const TOOLS: ToolDef[] = [
         description: "Free in-browser box generator for laser cutting: finger-jointed boxes at any size, measured inside or outside, with a lay-on, tray, hinged or closed lid, an inset floor, cross-lapped dividers and kerf compensation on every joint. Exports SVG, DXF and Falcon Design Space (.fds)."
     },
     {
+        id: "maze",
+        slug: "maze/",
+        label: "Maze generator",
+        short: "Maze",
+        hint: "a grid → a maze to engrave",
+        blurb: "A perfect maze at any size, with one route between any two points — walls engraved, the piece cut out, and a seed so the maze you liked is the maze you get back.",
+        // A path turning through a grid: the thing itself.
+        icon: "M3.75 3.75h16.5v16.5H3.75zM3.75 8.25h9M20.25 12h-7.5M3.75 15.75h9M12.75 8.25v3.75M8.25 15.75v4.5",
+        accepts: "nothing — it starts from a grid size",
+        title: "Maze generator for laser engraving — perfect mazes, any size | LaserKit",
+        description: "Free in-browser maze generator for laser cutting and engraving: a perfect rectangular maze at any size with one route between any two points, an adjustable corridor width, optional loops, a seed you can return to, and the solution as a preview aid. Exports SVG, DXF and Falcon Design Space (.fds)."
+    },
+    {
         id: "nest",
         slug: "nest/",
         label: "Nest on a sheet",

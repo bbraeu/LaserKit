@@ -1,0 +1,95 @@
+---
+import ToolPage from "../components/ToolPage.astro";
+import MazeTool from "../tools/MazeTool";
+---
+
+<ToolPage tool="maze">
+    <Fragment slot="lead">
+        A maze at any size, with exactly <strong class="text-slate-300">one route</strong> between any two points.
+        Walls engraved, the piece cut out around them, and a seed so the maze you liked is the maze you get back when
+        you come to change the corridor width.
+    </Fragment>
+
+    <MazeTool client:only="react">
+        <div slot="fallback" class="flex h-[100dvh] flex-col bg-[#08090d]">
+            <div class="h-12 shrink-0 border-b border-white/7"></div>
+            <div class="flex min-h-0 flex-1">
+                <div class="hidden w-60 shrink-0 border-r border-white/7 xl:block"></div>
+                <div class="flex-1"></div>
+                <div class="hidden w-76 shrink-0 border-l border-white/7 xl:block"></div>
+            </div>
+            <div class="h-7 shrink-0 border-t border-white/7"></div>
+        </div>
+    </MazeTool>
+
+    <section slot="notes" class="relative px-4 pb-24">
+        <div class="mx-auto w-[min(72rem,100%)]">
+            <div class="glass reveal rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">A maze is engraved, never cut</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    This is the one thing the tool will not let you get wrong, so it is worth saying why. A wall here
+                    is a <em>line</em>. Cut a line and you get a slot with nothing holding either side of it — cut a
+                    maze's walls and what comes off the bed is not a maze, it is a pile of loose rectangles. So the
+                    walls go out as line engraving, only the outline is cut, and there is no switch to change that.
+                </p>
+            </div>
+
+            <div class="mt-5 grid gap-5 lg:grid-cols-3">
+                <article class="glass reveal rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">Perfect, by construction</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        The generator stands in a cell, walks to a random neighbour it has not been to, knocks the wall
+                        down behind it, and when it is boxed in backs up to the last cell that still had a way out.
+                        What that produces is a <strong class="text-slate-300">perfect maze</strong>: exactly one route
+                        between any two cells, no loops, no unreachable corners. It is the kind everybody means by
+                        "maze", and the only kind whose difficulty is honestly described by its size.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 110ms">
+                    <h2 class="text-lg font-semibold text-white">Loops look harder and solve easier</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        The <strong class="text-slate-300">loops</strong> control opens some dead ends up. People like
+                        the look, so it is offered — but it is labelled for what it does rather than sold as
+                        difficulty. In a perfect maze you can rule a corridor out by having been down it; once there
+                        are loops you cannot, which sounds harder and in practice means blundering through works.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 220ms">
+                    <h2 class="text-lg font-semibold text-white">The seed is a real control</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        Without one, dragging the corridor width would reshuffle every wall and the maze on screen
+                        would never be the maze you exported. The same seed always gives the same walls. Press
+                        <em>another maze</em> until you like one, then change everything else freely.
+                    </p>
+                </article>
+            </div>
+
+            <div class="grid gap-5 lg:grid-cols-2">
+                <div class="glass reveal mt-5 rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">The answer is not in the file</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        <strong class="text-slate-300">The way through</strong> beside the grid draws the shortest
+                        route on the canvas. It is a reading aid and it is in no export, for the obvious reason:
+                        engraving the answer onto the puzzle would be a strange thing to hand somebody. If you want a
+                        solution card, take a screenshot.
+                    </p>
+                </div>
+                <div class="glass reveal mt-5 rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">Merged runs, for the head's sake</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        A 40 × 40 maze has some three thousand wall segments. Left as separate lines that is three
+                        thousand pen-down/pen-up pairs, and the head spends longer travelling than burning. Collinear
+                        neighbours are merged into one line each — the status bar shows both counts — which on a big
+                        maze more than halves the job and is invisible in the result.
+                    </p>
+                </div>
+            </div>
+
+            <p class="reveal mt-5 text-xs leading-relaxed text-slate-500">
+                Corridor width is the number that decides whether it is engraveable at all: below about 3 mm the walls
+                run into each other and the whole thing comes out as a grey block. If you want a small maze, use fewer
+                cells rather than narrower ones.
+            </p>
+        </div>
+    </section>
+</ToolPage>
