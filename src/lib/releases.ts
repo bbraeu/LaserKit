@@ -30,6 +30,22 @@ export const REPO = "https://github.com/bbraeu/LaserKit";
 
 export const RELEASES: Release[] = [
     {
+        version: "3.18.0",
+        date: "2026-08-08",
+        title: "The calendar panel, reorganised",
+        tools: ["calendar"],
+        notes: [
+            "The panel now follows the order a calendar is actually decided in — what you are making, then the dates, then the layout, then how it looks, then the machine's numbers — rather than the order the drawing is built in.",
+            "Every measurement shows its value and its unit, and every one of them can be typed. A kerf of 0.15 mm is a number you enter, not a number you drag towards.",
+            "Months across is 2 / 3 / 4 rather than a slider, and the month is picked by name. A slider is for continuous values; three choices are three buttons.",
+            "Controls that do not apply are gone rather than greyed out. A board has no tray section at all, a single month has no year-layout controls, and the thickness and kerf appear when something is actually cut from a sheet. A control that is shown and ignored teaches you that the panel lies.",
+            "The finished size, the month count and the letter height sit above the controls, so the question “how big will this come out?” is answered before the export menu is opened.",
+            "Presets are a starting point rather than a mode: change anything and it says which preset this came from, with one button to go back to it.",
+            "The long explanations have moved to the notes under the tool. The sidebar keeps one line each.",
+            "None of the geometry changed. The same inputs produce the same drawing, to the millimetre."
+        ]
+    },
+    {
         version: "3.17.0",
         date: "2026-08-08",
         title: "Celtic tree of life",

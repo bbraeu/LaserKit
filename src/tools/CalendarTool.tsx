@@ -1,6 +1,6 @@
-import { useCallback, useMemo } from "react";
-import { CalendarDays, Ruler, Type, Archive } from "lucide-react";
-import { CALENDAR_LIMITS, buildCalendar, cellOf, holderOptions, layoutSheets, monthText } from "../lib/calendar";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { CalendarDays, Layers3, Ruler, Type, Archive } from "lucide-react";
+import { CALENDAR_LIMITS, buildCalendar, cellOf, holderOptions, layoutSheets, monthLines, monthText } from "../lib/calendar";
 import type { CalendarLanguage, CalendarOptions, WeekStart } from "../lib/calendar";
 import { boxToSvg, buildBox } from "../lib/box";
 import { framedToDxf, framedToFds, framedToSvg } from "../lib/wordsearch";
@@ -9,12 +9,14 @@ import type { TextLayer, TextOptions, TextResult } from "../lib/text";
 import { pathData, r3, rectRing, shelfPack, shiftRing } from "../lib/design";
 import { OPERATION_COLORS } from "../lib/dxf";
 import { availableFonts } from "../lib/fonts";
+import { Button } from "../components/ui/button";
 import { PanelSection } from "../workspace/PanelSection";
 import { PresetList } from "../workspace/PresetList";
 import type { Preset } from "../workspace/PresetList";
 import { Preview } from "../workspace/Preview";
 import { Workspace } from "../workspace/Workspace";
-import { Field, SegmentedField, SelectField, SliderField, ToggleField } from "../workspace/fields";
+import { Field, ReadoutGrid, SegmentedField, SelectField, ToggleField } from "../workspace/fields";
+import { MeasureField } from "../workspace/fields/MeasureField";
 import { NumberField } from "../workspace/fields/NumberField";
 import { designExports, textBlob } from "../workspace/formats";
 import { useDebouncedBuild } from "../workspace/hooks/useDebouncedBuild";
@@ -34,6 +36,21 @@ import type { ExportItem, LegendItem } from "../workspace/types";
 // round every month with a margin you can set, and the option to cut the months
 // as separate cards. And once they are cards, they need somewhere to live — so
 // the tray is the box generator, called with the numbers the cards imply.
+//
+// The panel is ordered the way a calendar is decided rather than the way it is
+// drawn, and each section only holds what the current answer makes real:
+//
+//   (sidebar)   what are you making — a starting point, not a mode
+//   Calendar    which dates: the year, or one month of it, and in whose week
+//   Layout      one board or twelve cards, and how they are arranged
+//   Appearance  the type, and what is drawn round it
+//   Fabrication the machine's numbers: the bed, the sheet, the beam
+//   Tray        somewhere to keep the cards — cards only, so it is cards only
+//
+// Nothing here is disabled. A control that is shown and ignored is worse than
+// one that is absent: it teaches you that the panel lies. So a board has no
+// tray section at all, a single month has no year-layout controls, and the
+// thickness and the kerf appear when something is actually cut from a sheet.
 // ---------------------------------------------------------------------------
 
 const L = CALENDAR_LIMITS;
@@ -106,8 +123,19 @@ const LANGS = [
 
 const LAYOUTS = [
     { id: "plaque" as const, label: "One board", hint: "Every month on a single piece — a year to hang on a wall." },
-    { id: "cards" as const, label: "Separate cards", hint: "Each month cut out on its own, nested on a sheet. A desk calendar you flip, and the thing the tray is for." }
+    { id: "cards" as const, label: "Separate cards", hint: "Each month cut out on its own, nested on a sheet." }
 ];
+
+/**
+ * The months-across values a year board is ever worth cutting at.
+ *
+ * The engine takes one to six (`CALENDAR_LIMITS`) and warns above four. One is
+ * a twelve-month strip and five or six is a very wide, very short plaque, so
+ * the panel offers the three that are shapes somebody wants — while a value
+ * arriving from anywhere else joins the list rather than leaving the control
+ * showing nothing selected.
+ */
+const COLUMNS = [2, 3, 4];
 
 const PRESETS: Preset<CalendarParams>[] = [
     {
@@ -131,6 +159,17 @@ const PRESETS: Preset<CalendarParams>[] = [
 ];
 
 const mm = (n: number): string => `${n.toFixed(1)} mm`;
+
+/**
+ * Whether every value a preset names still holds.
+ *
+ * The same predicate `PresetList` uses to draw its tick, restated here because
+ * that one is private to it — and this tool needs the answer for a different
+ * question: not "which one is on?" but "how far has this drifted from the one
+ * it started as?".
+ */
+const matchesPatch = (o: CalendarParams, patch: Partial<CalendarParams>): boolean =>
+    (Object.keys(patch) as (keyof CalendarParams)[]).every(k => Object.is(o[k], patch[k]));
 
 /** Layers shifted somewhere, which is all placing a month amounts to. */
 const moveLayers = (aLayer: TextLayer[], dx: number, dy: number): TextLayer[] =>
@@ -359,6 +398,47 @@ export default function CalendarTool() {
         ...(p.outline || p.layout === "cards" ? [{ color: "#ff0000", label: "cut" }] : [])
     ];
 
+    // The two answers every other control in the panel is conditioned on: what
+    // is being made, and whether it is a year or one month of one.
+    const bCards = p.layout === "cards",
+        bYear = p.month === null;
+
+    /**
+     * The month names, in the chosen language.
+     *
+     * There is exactly one list of them in this kit and it is private to
+     * lib/calendar, so the name is read back out of the heading line the
+     * calendar itself sets rather than copied here. A second list would be a
+     * second thing to translate and a second thing to fall out of step with
+     * what is engraved on the board.
+     */
+    const aMonthName = useMemo(() => Array.from({ length: 12 }, (_, i) => ({
+        id: String(i),
+        label: monthLines({
+            year: thisYear,
+            month: i,
+            weekStart: "monday",
+            language: p.language,
+            columns: 1,
+            headings: true
+        }, i)[0]!.trim()
+    })), [p.language]);
+
+    const aColumn = useMemo(() => (COLUMNS.includes(p.columns) ? COLUMNS : [...COLUMNS, p.columns].sort((a, b) => a - b))
+        // The visible label is the digit; a bare "3" is no name at all to read
+        // out, so the accessible one says what three of them are.
+        .map(n => ({ id: String(n), label: String(n), srLabel: `${n} months across` })), [p.columns]);
+
+    // Which preset this started as, so drifting away from it can be named. A
+    // preset is a starting configuration rather than a mode: it stops matching
+    // the moment a slider moves, and the only useful thing left to say then is
+    // which one it was and how to get back to it.
+    const idPreset = PRESETS.find(o => matchesPatch(p, o.patch))?.id ?? null;
+    const [idBase, setBase] = useState<string | null>(null);
+    useEffect(() => { if (idPreset) setBase(idPreset); }, [idPreset]);
+    const oBase = PRESETS.find(o => o.id === idBase) ?? null,
+        bCustom = !!oBase && !idPreset;
+
     return (
         <Workspace
             toolId="calendar"
@@ -391,8 +471,33 @@ export default function CalendarTool() {
             sendTo={{ name: stem, svg: () => (result ? framedToSvg(result.framed) : ""), disabled: !result }}
             sidebarBlocks={[{
                 id: "cal-presets",
-                title: "Presets",
-                children: <PresetList presets={PRESETS} current={p} onApply={(patch, label) => params.set(patch, { label })} />
+                // The question first, because it is the one the tool can answer
+                // in a click and the panel of twenty controls cannot.
+                title: "What are you making?",
+                children: (
+                    <div className="space-y-2">
+                        <PresetList presets={PRESETS} current={p} onApply={(patch, label) => params.set(patch, { label })} />
+                        {/* Divergence is stated in words rather than by the tick
+                            simply going out: a preset that quietly stops being
+                            ticked reads as a bug, and there is nowhere to go
+                            back to. Never by colour — this has to survive being
+                            printed in grey. */}
+                        {bCustom && oBase && (
+                            <div className="flex items-center gap-2 border-t border-line pt-2">
+                                <span className="min-w-0 flex-1 truncate text-[11px] text-subtle-foreground">
+                                    Customized from {oBase.label}
+                                </span>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => params.set(oBase.patch, { label: `Reset to ${oBase.label}` })}
+                                >
+                                    Reset to preset
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                )
             }]}
             bottomPanels={result?.holder ? [{
                 id: "tray",
@@ -428,22 +533,30 @@ export default function CalendarTool() {
                 )
             }] : undefined}
         >
-            {/* ── Which dates ────────────────────────────────────────────── */}
-            <PanelSection id="cal-when" title="Dates" icon={<CalendarDays className="size-3" />}>
-                <Field label="Year" hint="Anything from 1900 to 2999. Leap years are worked out properly — every four, except every hundred, except every four hundred.">
-                    <NumberField
-                        label="Year, exact value"
-                        value={p.year}
-                        min={L.minYear}
-                        max={L.maxYear}
-                        unit=""
-                        onChange={n => params.set({ year: Math.round(n) }, { label: "Year", coalesce: "year" })}
+            {/* ── What it came out as ────────────────────────────────────── */}
+            {/* Above the controls rather than under them: the four numbers that
+                say whether this is the thing you meant are worth more than the
+                first slider, and a panel you have to scroll to the foot of to
+                find the finished size is a panel that hides its answer. */}
+            {result && (
+                <div className="border-b border-line px-3 py-2.5" data-testid="cal-readout">
+                    <ReadoutGrid
+                        items={[
+                            { label: "Finished", value: `${result.framed.width.toFixed(0)} × ${result.framed.height.toFixed(0)} mm` },
+                            { label: "Months", value: String(result.cal.aMonth.length) },
+                            ...(bYear && !bCards ? [{ label: "Across", value: String(p.columns) }] : []),
+                            { label: "Letter height", value: mm(p.capHeight) }
+                        ]}
                     />
-                </Field>
+                </div>
+            )}
+
+            {/* ── Which dates ────────────────────────────────────────────── */}
+            <PanelSection id="cal-when" title="Calendar" icon={<CalendarDays className="size-3" />}>
                 <SegmentedField
                     label="Show"
                     hint="The whole year, or a single month big enough to read from across a room."
-                    value={p.month === null ? "year" : "month"}
+                    value={bYear ? "year" : "month"}
                     choices={[
                         { id: "year", label: "Whole year", hint: "All twelve months." },
                         { id: "month", label: "One month", hint: "Just the one." }
@@ -451,15 +564,28 @@ export default function CalendarTool() {
                     onChange={(v: string) =>
                         params.set({ month: v === "year" ? null : new Date().getUTCMonth() }, { label: "Show" })}
                 />
-                {p.month !== null && (
-                    <SliderField
+                <Field
+                    label="Year"
+                    hint="1900 to 2999, with the leap years worked out properly."
+                    control={
+                        <NumberField
+                            label="Year, exact value"
+                            value={p.year}
+                            min={L.minYear}
+                            max={L.maxYear}
+                            unit=""
+                            onChange={n => params.set({ year: Math.round(n) }, { label: "Year", coalesce: "year" })}
+                        />
+                    }
+                />
+                {/* By name. A number from 1 to 12 is a thing to count on your
+                    fingers, and the names are already set on the board. */}
+                {!bYear && (
+                    <SelectField
                         label="Month"
-                        value={p.month + 1}
-                        min={1}
-                        max={12}
-                        step={1}
-                        unit=""
-                        onChange={n => params.set({ month: Math.round(n) - 1 }, { label: "Month", coalesce: "month" })}
+                        value={String(p.month)}
+                        choices={aMonthName}
+                        onChange={v => params.set({ month: Number(v) }, { label: "Month" })}
                     />
                 )}
                 <SegmentedField
@@ -487,103 +613,62 @@ export default function CalendarTool() {
                     choices={LAYOUTS}
                     onChange={(v: Layout) => params.set({ layout: v }, { label: "Make" })}
                 />
-                {p.month === null && p.layout === "plaque" && (
-                    <SliderField
+                {bYear && !bCards && (
+                    <SegmentedField
                         label="Months across"
-                        hint="Three or four is the shape a year board wants. Two makes a narrow one for a door."
-                        value={p.columns}
-                        min={L.minColumns}
-                        max={L.maxColumns}
-                        step={1}
-                        unit=""
-                        onChange={n => params.set({ columns: Math.round(n) }, { label: "Months across", coalesce: "columns" })}
+                        hint="Three or four is the shape a year board wants; two makes a narrow one for a door."
+                        value={String(p.columns)}
+                        choices={aColumn}
+                        onChange={v => params.set({ columns: Number(v) }, { label: "Months across" })}
                     />
                 )}
-                <SliderField
-                    label={p.layout === "cards" ? "Between cards" : "Between months"}
-                    hint={p.layout === "cards"
-                        ? "Space between one card and the next on the sheet. Not a design decision — it is how much room the head needs to get round the outside of a card without scorching its neighbour."
-                        : "Space between one month and the next, in millimetres — a real measurement rather than three space characters, which is what it used to be."}
-                    value={p.sheetGap}
-                    min={0}
-                    max={40}
-                    step={0.5}
-                    onChange={n => params.set({ sheetGap: n }, { label: "Between months", coalesce: "sheetGap" })}
-                />
+                {/* One month has no neighbour to be held away from, in either
+                    mode — the gap is measured between cells, and there is one
+                    cell. */}
+                {bYear && (
+                    <MeasureField
+                        label={bCards ? "Between cards" : "Between months"}
+                        hint={bCards
+                            ? "Room for the head to get round a card without scorching the next one."
+                            : "Space between one month and the next, in millimetres."}
+                        value={p.sheetGap}
+                        min={0}
+                        max={40}
+                        step={0.5}
+                        onChange={n => params.set({ sheetGap: n }, { label: "Between months", coalesce: "sheetGap" })}
+                    />
+                )}
                 {/*
                     On cards the margin is not optional and never has been: the
                     cut line is the edge of the card, so without a margin the
                     lettering runs off the edge. It used to be tied to the frame
                     toggle, which meant a card with no frame had no margin
-                    either.
+                    either. It sits here, with the card's corners, because both
+                    are the shape of the piece rather than what is drawn on it.
                 */}
-                {p.layout === "cards" && (
-                    <SliderField
-                        label="Card margin"
-                        hint="Clear space between the lettering and the edge of the card. This is what your fingers hold and what stops the cut line running through a Sunday."
-                        value={p.frameMargin}
-                        min={0}
-                        max={25}
-                        step={0.5}
-                        onChange={n => params.set({ frameMargin: n }, { label: "Card margin", coalesce: "frameMargin" })}
-                    />
+                {bCards && (
+                    <>
+                        <MeasureField
+                            label="Card margin"
+                            hint="What your fingers hold, and what keeps the cut line off the last column of days."
+                            value={p.frameMargin}
+                            min={0}
+                            max={25}
+                            step={0.5}
+                            onChange={n => params.set({ frameMargin: n }, { label: "Card margin", coalesce: "frameMargin" })}
+                        />
+                        <MeasureField
+                            label="Card corners"
+                            hint="Rounded corners cut faster than square ones and survive a pocket."
+                            value={p.frameRadius}
+                            min={0}
+                            max={15}
+                            step={0.5}
+                            onChange={n => params.set({ frameRadius: n }, { label: "Card corners", coalesce: "frameRadius" })}
+                        />
+                    </>
                 )}
-                <ToggleField
-                    label={p.layout === "cards" ? "Rule inside each card" : "Frame each month"}
-                    hint={p.layout === "cards"
-                        ? "An engraved rectangle drawn inside the card's edge. Engraved, not cut — a second cut line two millimetres in would turn every card into a card and a picture frame."
-                        : "An engraved rectangle round every month, which is what makes a board of twelve tables read as a table rather than as a wall of numbers. It is engraved: cut, it would separate the board into twelve pieces."}
-                    checked={p.sheetFrames}
-                    onChange={b => params.set({ sheetFrames: b }, { label: "Frames" })}
-                />
-                {p.sheetFrames && p.layout === "cards" && (
-                    <SliderField
-                        label="Rule inset"
-                        hint="How far the engraved rule sits inside the cut edge."
-                        value={p.frameInset}
-                        min={0.5}
-                        max={12}
-                        step={0.5}
-                        onChange={n => params.set({ frameInset: n }, { label: "Rule inset", coalesce: "frameInset" })}
-                    />
-                )}
-                {p.sheetFrames && p.layout === "plaque" && (
-                    <SliderField
-                        label="Frame margin"
-                        hint="Clear space between a month and the rule drawn round it."
-                        value={p.frameMargin}
-                        min={0}
-                        max={25}
-                        step={0.5}
-                        onChange={n => params.set({ frameMargin: n }, { label: "Frame margin", coalesce: "frameMargin" })}
-                    />
-                )}
-                {(p.sheetFrames || p.layout === "cards") && (
-                    <SliderField
-                        label={p.layout === "cards" ? "Card corners" : "Frame corners"}
-                        hint={p.layout === "cards" ? "Rounded corners cut faster than square ones and survive a pocket." : undefined}
-                        value={p.frameRadius}
-                        min={0}
-                        max={15}
-                        step={0.5}
-                        onChange={n => params.set({ frameRadius: n }, { label: "Frame corners", coalesce: "frameRadius" })}
-                    />
-                )}
-                {/*
-                    Shown in both modes, because it works in both. It used to be
-                    hidden on cards while still being obeyed there, so whatever
-                    it had been left at on a board was what the cards came out
-                    with and there was no way to see it, let alone change it.
-                */}
-                <ToggleField
-                    label={p.layout === "cards" ? "Month names" : "Names and the year"}
-                    hint={p.layout === "cards"
-                        ? "The month's name above its table. Worth keeping: a card of numbers with no name on it is a puzzle."
-                        : "Month names above each table, and the year at the top."}
-                    checked={p.headings}
-                    onChange={b => params.set({ headings: b }, { label: "Headings" })}
-                />
-                {p.layout === "plaque" && (
+                {!bCards && (
                     <>
                         <ToggleField
                             label="Cut the board"
@@ -592,7 +677,7 @@ export default function CalendarTool() {
                             onChange={b => params.set({ outline: b }, { label: "Board" })}
                         />
                         {p.outline && (
-                            <SliderField
+                            <MeasureField
                                 label="Board corners"
                                 value={p.radius}
                                 min={0}
@@ -603,8 +688,92 @@ export default function CalendarTool() {
                         )}
                     </>
                 )}
-                {p.layout === "cards" && (
-                    <SliderField
+            </PanelSection>
+
+            {/* ── How it is set ──────────────────────────────────────────── */}
+            <PanelSection id="cal-look" title="Appearance" icon={<Type className="size-3" />}>
+                <SelectField
+                    label="Font"
+                    hint="A monospaced face keeps the 1st above the 11th; a proportional one makes each month ragged."
+                    value={p.fontFamily}
+                    choices={aFont.map(o => ({ id: o.id, label: o.label }))}
+                    onChange={v => params.set({ fontFamily: v }, { label: "Font" })}
+                />
+                <MeasureField
+                    label="Letter height"
+                    hint="Cap height. A whole year at 4 mm is about an A4 board; below 3 mm the digits close up."
+                    value={p.capHeight}
+                    min={2}
+                    max={20}
+                    step={0.5}
+                    onChange={n => params.set({ capHeight: n }, { label: "Letter height", coalesce: "capHeight" })}
+                />
+                {/*
+                    Shown in both modes, because it works in both. It used to be
+                    hidden on cards while still being obeyed there, so whatever
+                    it had been left at on a board was what the cards came out
+                    with and there was no way to see it, let alone change it.
+                */}
+                <ToggleField
+                    label={bYear && !bCards ? "Names and the year" : bYear ? "Month names" : "Month name"}
+                    hint={bYear && !bCards
+                        ? "Month names above each table, and the year at the top."
+                        : bCards
+                            ? "The month's name above its table. A card of numbers with no name on it is a puzzle."
+                            : "The month's name above its table."}
+                    checked={p.headings}
+                    onChange={b => params.set({ headings: b }, { label: "Headings" })}
+                />
+                <ToggleField
+                    label={bCards ? "Rule inside each card" : bYear ? "Frame each month" : "Frame the month"}
+                    hint={bCards
+                        ? "An engraved rectangle inside the card's edge — engraved, not cut."
+                        : "An engraved rectangle round every month. Engraved: cut, it would be twelve loose pieces."}
+                    checked={p.sheetFrames}
+                    onChange={b => params.set({ sheetFrames: b }, { label: "Frames" })}
+                />
+                {p.sheetFrames && bCards && (
+                    <MeasureField
+                        label="Rule inset"
+                        hint="How far the engraved rule sits inside the cut edge."
+                        value={p.frameInset}
+                        min={0.5}
+                        max={12}
+                        step={0.5}
+                        onChange={n => params.set({ frameInset: n }, { label: "Rule inset", coalesce: "frameInset" })}
+                    />
+                )}
+                {p.sheetFrames && !bCards && (
+                    <>
+                        <MeasureField
+                            label="Frame margin"
+                            hint="Clear space between a month and the rule drawn round it."
+                            value={p.frameMargin}
+                            min={0}
+                            max={25}
+                            step={0.5}
+                            onChange={n => params.set({ frameMargin: n }, { label: "Frame margin", coalesce: "frameMargin" })}
+                        />
+                        <MeasureField
+                            label="Frame corners"
+                            value={p.frameRadius}
+                            min={0}
+                            max={15}
+                            step={0.5}
+                            onChange={n => params.set({ frameRadius: n }, { label: "Frame corners", coalesce: "frameRadius" })}
+                        />
+                    </>
+                )}
+            </PanelSection>
+
+            {/* ── The machine's numbers ──────────────────────────────────── */}
+            {/* A board is one piece cut from whatever is on the bed: nothing
+                here is read for it, so none of it is shown. The thickness and
+                the kerf are the tray's — they are what the finger joints are
+                worked out from, and nothing else in this tool asks. */}
+            {bCards && (
+                <PanelSection id="cal-make" title="Fabrication" icon={<Layers3 className="size-3" />}>
+                    <MeasureField
                         label="Sheet width"
                         hint="The cards are nested in rows no wider than this — set it to your machine's bed."
                         value={p.sheetWidth}
@@ -613,75 +782,51 @@ export default function CalendarTool() {
                         step={10}
                         onChange={n => params.set({ sheetWidth: n }, { label: "Sheet width", coalesce: "sheetWidth" })}
                     />
-                )}
-            </PanelSection>
+                    {p.holder && (
+                        <>
+                            <MeasureField
+                                label="Thickness"
+                                hint="Every joint in the tray is exactly this deep, so measure the board rather than trusting the label."
+                                value={p.thickness}
+                                min={0.8}
+                                max={12}
+                                step={0.1}
+                                onChange={n => params.set({ thickness: n }, { label: "Thickness", coalesce: "thickness" })}
+                            />
+                            <MeasureField
+                                label="Kerf"
+                                hint="How much width the beam burns away. Taken out of every finger and added to every notch."
+                                value={p.kerf}
+                                min={0}
+                                max={1}
+                                step={0.01}
+                                onChange={n => params.set({ kerf: n }, { label: "Kerf", coalesce: "kerf" })}
+                            />
+                        </>
+                    )}
+                </PanelSection>
+            )}
 
             {/* ── Somewhere to keep them ─────────────────────────────────── */}
-            <PanelSection id="cal-holder" title="Tray" icon={<Archive className="size-3" />} defaultOpen={false}>
-                <ToggleField
-                    label="Cut a tray for the cards"
-                    hint="A finger-jointed tray to stand the cards in, deep enough for the whole year and half a card tall so the month you want is readable without taking it out. It appears in a panel under the canvas and in the export menu, and it is the box generator rather than a second one."
-                    checked={p.holder}
-                    disabled={p.layout !== "cards"}
-                    onChange={b => params.set({ holder: b }, { label: "Tray" })}
-                />
-                {p.layout !== "cards" && (
-                    <p className="text-[11px] leading-relaxed text-subtle-foreground">
-                        A tray holds cards. Switch <em>Make</em> to <strong className="text-foreground">separate
-                        cards</strong> first.
-                    </p>
-                )}
-                {p.holder && p.layout === "cards" && (
-                    <>
-                        <SliderField
-                            label="Thickness"
-                            hint="The sheet the cards and the tray are cut from. Every joint in the tray is exactly this deep, so measure the actual board rather than trusting the label."
-                            value={p.thickness}
-                            min={0.8}
-                            max={12}
-                            step={0.1}
-                            onChange={n => params.set({ thickness: n }, { label: "Thickness", coalesce: "thickness" })}
-                        />
-                        <SliderField
-                            label="Kerf"
-                            hint="How much width the beam burns away. Taken out of every finger and added to every notch, so the tray taps together instead of arriving loose."
-                            value={p.kerf}
-                            min={0}
-                            max={1}
-                            step={0.01}
-                            onChange={n => params.set({ kerf: n }, { label: "Kerf", coalesce: "kerf" })}
-                        />
-                    </>
-                )}
-            </PanelSection>
-
-            {/* ── How it is set ──────────────────────────────────────────── */}
-            <PanelSection id="cal-type" title="Lettering" icon={<Type className="size-3" />}>
-                <SelectField
-                    label="Font"
-                    hint="A monospaced face keeps the columns inside a month in line — the 1st and the 11th have to sit above each other. The months themselves are placed in millimetres, so a proportional face no longer makes them collide; it only makes each one ragged."
-                    value={p.fontFamily}
-                    choices={aFont.map(o => ({ id: o.id, label: o.label }))}
-                    onChange={v => params.set({ fontFamily: v }, { label: "Font" })}
-                />
-                <SliderField
-                    label="Letter height"
-                    hint="Cap height. A whole year at 4 mm is about an A4 board; below 3 mm the digits close up when engraved."
-                    value={p.capHeight}
-                    min={2}
-                    max={20}
-                    step={0.5}
-                    onChange={n => params.set({ capHeight: n }, { label: "Letter height", coalesce: "capHeight" })}
-                />
-                {result && (
-                    <p className="text-[11px] leading-relaxed text-subtle-foreground">
-                        <span className="text-muted-foreground">
-                            {result.framed.width.toFixed(0)} × {result.framed.height.toFixed(0)} mm
-                        </span>{" "}
-                        finished. Check the dates against a calendar you trust before you cut.
-                    </p>
-                )}
-            </PanelSection>
+            {/* A tray holds cards. On a board the section is not disabled with
+                an explanation of why — it is not there, which is the same
+                sentence without the dead switch. */}
+            {bCards && (
+                <PanelSection id="cal-holder" title="Tray" icon={<Archive className="size-3" />}>
+                    <ToggleField
+                        label="Cut a tray for the cards"
+                        hint="A finger-jointed tray to stand the cards in. It appears in a panel under the canvas and in the export menu."
+                        checked={p.holder}
+                        onChange={b => params.set({ holder: b }, { label: "Tray" })}
+                    />
+                    {p.holder && (
+                        <p className="text-[11px] leading-relaxed text-subtle-foreground">
+                            Cut from the same sheet as the cards; its thickness and kerf are under{" "}
+                            <span className="text-muted-foreground">Fabrication</span>.
+                        </p>
+                    )}
+                </PanelSection>
+            )}
         </Workspace>
     );
 }

@@ -6,6 +6,13 @@ import { exportAs, exportDefault, exportExtra, openTool, stat, waitForDrawing } 
 // tests/unit/calendar.test.ts against days everybody knows; what is checked
 // here is that the panel reaches them, and that the one fact worth shouting —
 // whether the year is a leap year — is on screen before anything is cut.
+//
+// The panel is grouped the way a calendar is decided (Calendar, Layout,
+// Appearance, Fabrication, Tray) and shows only what the current answers make
+// real, so half of what is checked below is what is *absent*: a tray section on
+// a board, a months-across control on a single month, a thickness with nothing
+// to cut from a sheet. Those are the assertions to keep — a control that is
+// shown and ignored is the failure this grouping exists to prevent.
 
 const panel = (page: Page) => page.getByTestId("inspector");
 
@@ -39,17 +46,41 @@ test("says whether the year is a leap year, and is right about it", async ({ pag
 test("drops to a single month and back", async ({ page }) => {
     await panel(page).getByRole("radio", { name: "One month" }).click();
     await expect(stat(page, "Months")).toContainText("1");
-    // The months-across control has nothing to do when there is one month.
-    await expect(panel(page).getByRole("slider", { name: "Months across" })).toHaveCount(0);
+    // Neither of the year-layout controls has anything to do with one month:
+    // there is one cell, so nothing to arrange across and nothing to hold it
+    // away from its neighbour.
+    await expect(panel(page).getByRole("radiogroup", { name: "Months across" })).toHaveCount(0);
+    await expect(panel(page).getByRole("slider", { name: "Between months" })).toHaveCount(0);
     await panel(page).getByRole("radio", { name: "Whole year" }).click();
     await expect(stat(page, "Months")).toContainText("12");
 });
 
+test("picks the month by name rather than by number", async ({ page }) => {
+    await setNum(page, "Year", 2030);
+    await panel(page).getByRole("radio", { name: "One month" }).click();
+    const month = panel(page).getByRole("combobox", { name: "Month", exact: true });
+    await month.click();
+    await page.getByRole("option", { name: "September", exact: true }).click();
+    await expect(month).toContainText("September");
+    await expect(stat(page, "Months")).toContainText("1");
+    // The name has to *be* the ninth month rather than the ninth word in a
+    // list, and the filename is where that shows.
+    const svg = await exportDefault(page);
+    expect(svg.suggestedFilename()).toBe("calendar_2030_09.svg");
+});
+
 test("reshapes the plaque with the columns", async ({ page }) => {
     const width = async () => Number((await stat(page, "Size").innerText()).replace(/^Size\s*/, "").split("×")[0]);
-    await setNum(page, "Months across", 2);
+    const across = panel(page).getByRole("radiogroup", { name: "Months across" });
+    // Two, three and four. The engine takes one to six and warns above four;
+    // the panel offers the three that are shapes somebody wants.
+    await expect(across.getByRole("radio")).toHaveCount(3);
+
+    const three = await width();
+    await across.getByRole("radio", { name: "2 months across" }).click();
+    await expect.poll(width).toBeLessThan(three);
     const narrow = await width();
-    await setNum(page, "Months across", 4);
+    await across.getByRole("radio", { name: "4 months across" }).click();
     await expect.poll(width).toBeGreaterThan(narrow);
 });
 
@@ -67,6 +98,24 @@ test("writes the calendar named after the year", async ({ page }) => {
         const dl = await exportAs(page, new RegExp(`^${label}`));
         expect(dl.suggestedFilename()).toBe(`calendar_2030.${ext}`);
     }
+});
+
+test.describe("presets", () => {
+    test("starts from one, and says so once it has drifted", async ({ page }) => {
+        const side = page.getByTestId("sidebar");
+        // A preset is a starting configuration, not a mode: it is on while
+        // every value it names still matches, and the moment one does not the
+        // panel says which one this came from rather than silently losing the
+        // tick.
+        await expect(side.getByRole("button", { name: /Year plaque/ })).toHaveAttribute("aria-pressed", "true");
+        await setNum(page, "Letter height", 7);
+        await expect(side).toContainText("Customized from Year plaque");
+
+        await side.getByRole("button", { name: "Reset to preset" }).click();
+        await expect(page.getByRole("spinbutton", { name: "Letter height, exact value", exact: true }))
+            .toHaveValue("4");
+        await expect(side).not.toContainText("Customized from");
+    });
 });
 
 test.describe("layout", () => {
@@ -99,24 +148,33 @@ test.describe("layout", () => {
     test("cuts the months as separate cards", async ({ page }) => {
         await panel(page).getByRole("radio", { name: "Separate cards" }).click();
         // Nested on a sheet rather than laid on a board, so the months-across
-        // control has nothing to do.
-        await expect(panel(page).getByRole("slider", { name: "Months across" })).toHaveCount(0);
+        // control has nothing to do — and the width of the sheet, which is the
+        // machine's bed, becomes a number that matters.
+        await expect(panel(page).getByRole("radiogroup", { name: "Months across" })).toHaveCount(0);
         await expect(panel(page).getByRole("slider", { name: "Sheet width" })).toBeVisible();
         await expect(stat(page, "Months")).toContainText("12");
     });
 });
 
 test.describe("the tray", () => {
-    test("is offered only for cards, and says why", async ({ page }) => {
-        await panel(page).getByRole("button", { name: "Tray", exact: true }).click();
-        await expect(page.getByRole("switch", { name: "Cut a tray for the cards" })).toBeDisabled();
-        await expect(panel(page)).toContainText("A tray holds cards");
+    test("is not offered at all on one board", async ({ page }) => {
+        // It used to be a disabled switch with a paragraph explaining why. A
+        // control that is shown and ignored teaches you that the panel lies, so
+        // the whole section is absent until there are cards to stand up.
+        await expect(panel(page).getByRole("button", { name: "Tray", exact: true })).toHaveCount(0);
+        await expect(page.getByRole("switch", { name: "Cut a tray for the cards" })).toHaveCount(0);
+        await panel(page).getByRole("radio", { name: "Separate cards" }).click();
+        await expect(page.getByRole("switch", { name: "Cut a tray for the cards" })).toBeVisible();
     });
 
     test("appears in a panel under the canvas and in the export menu", async ({ page }) => {
         await panel(page).getByRole("radio", { name: "Separate cards" }).click();
-        await panel(page).getByRole("button", { name: "Tray", exact: true }).click();
+        // The tray is the only thing here cut *from* a sheet, so the thickness
+        // and the kerf are its and appear with it.
+        await expect(panel(page).getByRole("slider", { name: "Thickness" })).toHaveCount(0);
         await page.getByRole("switch", { name: "Cut a tray for the cards" }).click();
+        await expect(panel(page).getByRole("slider", { name: "Thickness" })).toBeVisible();
+        await expect(panel(page).getByRole("slider", { name: "Kerf" })).toBeVisible();
 
         // The parts sheet, the way the stamp tool shows its handle.
         await expect(page.getByTestId("tray-preview")).toBeVisible();
