@@ -59,11 +59,24 @@ import MandalaTool from "../tools/MandalaTool";
             </div>
 
             <div class="glass reveal mt-5 rounded-2xl p-6">
-                <h2 class="text-lg font-semibold text-white">Eight motifs, and why these eight</h2>
+                <h2 class="text-lg font-semibold text-white">Eight simple motifs, and seven built ones</h2>
                 <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
-                    They are not arbitrary. Every guide to drawing a mandala reaches for the same handful — teardrops,
-                    pointed petals, dots, triangles, arcs, diamonds — because those are the shapes that survive being
-                    repeated thirty times without turning to mush.
+                    The first eight are not arbitrary. Every guide to drawing a mandala reaches for the same handful —
+                    teardrops, pointed petals, dots, triangles, arcs, diamonds — because those are the shapes that
+                    survive being repeated thirty times without turning to mush.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    They are also all the same <em>kind</em> of shape, and that was the ceiling. Each is one closed
+                    curve, symmetric about its slot and bulging outwards — so it can be a petal, a lens, a rhombus or a
+                    slot, and it can never be a star, an arrow or a rosette. A star has
+                    <strong class="text-slate-300">two radii</strong>; an arrow is not symmetric end to end; a rosette
+                    is seven shapes rather than one. No amount of taste in the curve gets you there.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    So the seven below are drawn a different way: in a little coordinate system of their own, as any
+                    number of closed rings made of straight runs, arcs and thickened centrelines, and then bent onto
+                    the band. Those are the shapes a clip-art mandala kit is full of, and they are what makes a ring
+                    read as designed rather than sampled.
                 </p>
                 <dl class="mt-4 grid gap-4 text-sm leading-relaxed sm:grid-cols-2 lg:grid-cols-4">
                     <div>
@@ -99,6 +112,64 @@ import MandalaTool from "../tools/MandalaTool";
                         <dd class="mt-1 text-slate-400">A ring of small circles instead of a band of shapes. Structural rather than decorative: without one, a run of bands reads as concentric fences.</dd>
                     </div>
                 </dl>
+
+                <h3 class="mt-6 text-sm font-semibold tracking-wide text-slate-300 uppercase">Built from parts</h3>
+                <dl class="mt-3 grid gap-4 text-sm leading-relaxed sm:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                        <dt class="font-semibold text-slate-200">Rosettes</dt>
+                        <dd class="mt-1 text-slate-400">Six petals round a middle — a whole little flower as one motif, rather than one petal repeated. The most ornate of the set, and the one that most obviously could not be a single curve.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Stars</dt>
+                        <dd class="mt-1 text-slate-400">Five points, the first aimed at the rim. Two radii alternating, which is exactly the thing a petal profile cannot do.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Arrows</dt>
+                        <dd class="mt-1 text-slate-400">A shaft with a chevron head and a fletched tail. The only motif that <em>points</em>, so a ring of them reads as rotation rather than as decoration.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Paisley</dt>
+                        <dd class="mt-1 text-slate-400">A boteh: round at the bottom, curling to a point, with a dot in the belly. Asymmetric on purpose — the shape that most looks drawn by hand.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Crescents</dt>
+                        <dd class="mt-1 text-slate-400">Moons, thick in the middle and tapering to a horn at each end. Like the drops, they read as motion round the circle, but from both ends at once.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Chevrons</dt>
+                        <dd class="mt-1 text-slate-400">A plain V-bar with rounded corners. The running border every printed mandala has somewhere, and the most open of the built set — the one to reach for when cutting.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Greek key</dt>
+                        <dd class="mt-1 text-slate-400">A line that turns four corners. Angular and architectural; one ring of it under a ring of rosettes is the oldest pairing there is.</dd>
+                    </div>
+                </dl>
+            </div>
+
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">Why a motif is drawn in its own little world</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    A built motif is authored on a square patch — across the slot one way, out along the band the
+                    other, both measured in <strong class="text-slate-300">band heights</strong> — and then bent onto
+                    the ring so that a point sits the same number of millimetres round the circle whatever radius it
+                    ends up at. The obvious alternative, authoring in the slot's own angular units, makes every shape a
+                    different proportion on every ring: a star drawn once would be a starfish on the inner ring and a
+                    snowflake on the outer.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    It also means the motifs keep the proportions they were drawn with. When the symmetry gets high
+                    enough that two neighbours would touch, a motif is narrowed <em>across</em> the slot and never
+                    along it — squeezing both ways would leave a gap at the inner and outer edge of the band, and the
+                    ring would stop reading as a ring.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    One consequence is worth knowing about if you cut. The web is worked out over
+                    <em>every point</em> of a motif, not just its widest, because the widest point is not where two
+                    neighbours come closest: a point eats a fixed number of millimetres of the circle whatever radius
+                    it is at, so the angular room it takes grows as the radius shrinks. An arrow's fletching is
+                    narrower than its head and much further in, and it is the fletching that decides how close two
+                    arrows get.
+                </p>
             </div>
 
             <div class="grid gap-5 lg:grid-cols-2">

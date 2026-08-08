@@ -10,14 +10,29 @@ import { buildFds } from "./fds";
 // comes out looking deliberate — and the way to get that is fewer controls that
 // each move the whole drawing, not a slider per ring.
 //
-// Everything is one family of shapes. A motif occupies an angular slot of
-// 2π/symmetry, spans a band of radius, and its half-angle at each point is
+// There are two families of shape here, and the second exists because the first
+// has a ceiling.
+//
+// A **band motif** occupies an angular slot of 2π/symmetry, spans a band of
+// radius, and its half-angle at each point is
 //
 //     a(t) = aMax · f(t),   t = 0 at the inner edge, 1 at the outer
 //
 // where f is the only thing that differs between a petal, a spoke and a
 // scallop. That is worth the constraint: four motifs written four times would
 // drift, and four motifs sharing a sampler stay a set.
+//
+// But it is also the reason the first eight all looked related. One profile
+// function is one closed curve, symmetric about its slot and convex — so it can
+// be a petal, a lens, a rhombus or a slot, and it can never be a star, an arrow
+// or a rosette. No amount of taste in f gets there; a star has two radii and an
+// arrow is not symmetric end to end.
+//
+// So a **composed motif** is drawn in its own little coordinate system instead
+// — see `motif space` below — where it is any number of closed rings, made of
+// straight runs, arcs and thickened centrelines. Those are the shapes a
+// clip-art mandala kit is full of, and they are what makes a ring read as
+// designed rather than sampled.
 //
 // The one thing this tool has to be careful about is **cut** mandalas. A cut
 // pattern is holes in a disc, and holes that meet each other separate the disc
@@ -52,7 +67,18 @@ export const MANDALA_LIMITS = {
  * turning to mush, and `dots` is in there because a ring that is *not* a band
  * of motifs is what stops a mandala reading as a set of concentric fences.
  */
-export type Motif = "petal" | "lotus" | "drop" | "spoke" | "scallop" | "diamond" | "dart" | "dots";
+export type BandMotif = "petal" | "lotus" | "drop" | "spoke" | "scallop" | "diamond" | "dart";
+
+/**
+ * Motifs that are an assembly rather than one curve.
+ *
+ * These are the shapes a profile function cannot reach: a star alternates
+ * between two radii, an arrow is not symmetric end to end, a rosette is seven
+ * rings rather than one, and a Greek key is a line that turns corners.
+ */
+export type ComposedMotif = "arrow" | "star" | "flower" | "paisley" | "crescent" | "chevron" | "fret";
+
+export type Motif = BandMotif | ComposedMotif | "dots";
 
 export type MandalaStyle = Motif | "mixed";
 
@@ -152,7 +178,7 @@ const rng = (seed: number): (() => number) => {
  * `t` runs 0 at the inner edge of the ring to 1 at the outer. Every one of them
  * is 0 at both ends, which is what closes the shape without a special case.
  */
-const PROFILE: Record<Motif, (t: number) => number> = {
+const PROFILE: Record<BandMotif, (t: number) => number> = {
     // A lens: widest in the middle, pointed at both ends.
     petal: t => Math.sin(Math.PI * t),
     // The same, drawn out to a sharp point at each end. The classic lotus
@@ -169,13 +195,323 @@ const PROFILE: Record<Motif, (t: number) => number> = {
     // as flowers.
     diamond: t => 1 - Math.abs(2 * t - 1),
     // A triangle standing on the hub and widening to the rim.
-    dart: t => t,
-    // Not a band shape at all — see `dotRing`.
-    dots: () => 0
+    dart: t => t
 };
 
+// ---------------------------------------------------------------------------
+// Motif space
+//
+// A composed motif is drawn in a little coordinate system of its own:
+//
+//     x   across the slot, 0 in the middle of it
+//     y   out along the band, 0 at the inner edge and 1 at the outer
+//
+// Both axes are measured in **band heights**, so the space is isotropic: a
+// circle of radius 0.2 authored here comes out as round on the disc as a shape
+// on a curve can be. That is the whole reason for the indirection. The obvious
+// alternative — author in the slot's own angular units — makes every shape a
+// different proportion on every ring, so a star drawn once is a starfish on the
+// inner ring and a snowflake on the outer.
+//
+// The map to the disc preserves arc length: a point at `x` sits `x · h` of
+// millimetres round the circle from the motif's own centreline, whatever radius
+// it is at. Straight runs come out very slightly bent, which is right — a motif
+// that ignored the curve of its ring would look pasted on.
+// ---------------------------------------------------------------------------
+
+/** A point in motif space. */
+interface UV {
+    x: number;
+    y: number;
+}
+
+/**
+ * Half the width a motif may fill, in band heights.
+ *
+ * The same 0.42 the band motifs are capped at, so the two families come out the
+ * same size — see `aspect` in `buildMandala` for why that number and not 0.5.
+ */
+const W = 0.42;
+
+/** A closed circle in motif space. */
+const uvCircle = (cx: number, cy: number, r: number, segs = 22): UV[] =>
+    Array.from({ length: segs }, (_, i) => {
+        const a = (2 * Math.PI * i) / segs;
+        return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+    });
+
+/** An open arc in motif space, for use as a centreline. */
+const uvArc = (cx: number, cy: number, r: number, a0: number, a1: number, segs = 22): UV[] =>
+    Array.from({ length: segs + 1 }, (_, i) => {
+        const a = a0 + ((a1 - a0) * i) / segs;
+        return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+    });
+
+/**
+ * Corners turned into short arcs.
+ *
+ * Needed before thickening anything with a bend in it: offsetting a polyline by
+ * averaged vertex normals pinches at a sharp corner, and rounding the corner
+ * first is both the cheap fix and what the shape wants anyway. A Greek key with
+ * knife-edge corners is a diagram; one with a radius on them is a border.
+ */
+const roundCorners = (aPt: UV[], radius: number, segs = 5): UV[] => {
+    if (aPt.length < 3) return aPt;
+    const out: UV[] = [aPt[0]!];
+    for (let i = 1; i < aPt.length - 1; i++) {
+        const p = aPt[i]!,
+            a = aPt[i - 1]!,
+            b = aPt[i + 1]!,
+            va = { x: a.x - p.x, y: a.y - p.y },
+            vb = { x: b.x - p.x, y: b.y - p.y },
+            la = Math.hypot(va.x, va.y) || 1,
+            lb = Math.hypot(vb.x, vb.y) || 1,
+            r = Math.min(radius, la / 2, lb / 2),
+            pa = { x: p.x + (va.x / la) * r, y: p.y + (va.y / la) * r },
+            pb = { x: p.x + (vb.x / lb) * r, y: p.y + (vb.y / lb) * r };
+        out.push(pa);
+        // A quadratic through the corner: two points and the corner itself are
+        // all the control an arc of this size needs.
+        for (let k = 1; k < segs; k++) {
+            const t = k / segs,
+                m = 1 - t;
+            out.push({
+                x: m * m * pa.x + 2 * m * t * p.x + t * t * pb.x,
+                y: m * m * pa.y + 2 * m * t * p.y + t * t * pb.y
+            });
+        }
+        out.push(pb);
+    }
+    out.push(aPt[aPt.length - 1]!);
+    return out;
+};
+
+/**
+ * A centreline given a width: the outline of a stroke, as a closed ring.
+ *
+ * Half the composed motifs are a line of some thickness — the crescent, the
+ * chevron, the key, the tail of the paisley — and drawing each of those as an
+ * explicit outline would be the same forty points written out twice, once
+ * forwards and once backwards, with a sign error waiting in one of them.
+ *
+ * `width` is a function of the distance along, so a shape can taper: that is
+ * what turns an arc into a moon with horns and a curve into a boteh.
+ */
+const ribbon = (aSpine: UV[], width: (s: number) => number, capStart = false): UV[] => {
+    const n = aSpine.length;
+    if (n < 2) return [];
+    const normalAt = (i: number): UV => {
+        const a = aSpine[Math.max(0, i - 1)]!,
+            b = aSpine[Math.min(n - 1, i + 1)]!,
+            dx = b.x - a.x,
+            dy = b.y - a.y,
+            len = Math.hypot(dx, dy) || 1;
+        return { x: -dy / len, y: dx / len };
+    };
+    const left: UV[] = [],
+        right: UV[] = [];
+    for (let i = 0; i < n; i++) {
+        const p = aSpine[i]!,
+            hw = Math.max(0, width(i / (n - 1))) / 2,
+            v = normalAt(i);
+        left.push({ x: p.x + v.x * hw, y: p.y + v.y * hw });
+        right.push({ x: p.x - v.x * hw, y: p.y - v.y * hw });
+    }
+    // A round end where the shape is meant to be blunt: a paisley's bulb is not
+    // a chopped-off ribbon.
+    const cap: UV[] = [];
+    if (capStart) {
+        const p = aSpine[0]!,
+            hw = Math.max(0, width(0)) / 2,
+            v = normalAt(0),
+            a0 = Math.atan2(v.y, v.x);
+        for (let k = 1; k < 10; k++) {
+            const a = a0 + (Math.PI * k) / 10;
+            cap.push({ x: p.x + hw * Math.cos(a), y: p.y + hw * Math.sin(a) });
+        }
+    }
+    return [...left, ...right.reverse(), ...cap];
+};
+
+/** A star with two radii, its first point aimed out along the band. */
+const uvStar = (cy: number, rOut: number, rIn: number, points: number): UV[] =>
+    Array.from({ length: points * 2 }, (_, k) => {
+        const th = (Math.PI * k) / points,
+            r = k % 2 === 0 ? rOut : rIn;
+        return { x: r * Math.sin(th), y: cy + r * Math.cos(th) };
+    });
+
+/** One petal of a rosette: a lens laid along a direction from the middle. */
+const uvPetal = (cy: number, th: number, r0: number, r1: number, hw: number, segs = 12): UV[] => {
+    const at = (s: number, side: number): UV => {
+        const r = r0 + (r1 - r0) * s,
+            off = side * hw * Math.sin(Math.PI * s);
+        return {
+            x: r * Math.sin(th) + off * Math.cos(th),
+            y: cy + r * Math.cos(th) - off * Math.sin(th)
+        };
+    };
+    const out: UV[] = [];
+    for (let i = 0; i <= segs; i++) out.push(at(i / segs, +1));
+    for (let i = segs; i >= 0; i--) out.push(at(i / segs, -1));
+    return out;
+};
+
+/** A composed motif, with what the layout needs to know about it. */
+interface Composed {
+    rings: UV[][];
+    /**
+     * Every point of it, as distance from the centreline and height up the
+     * band.
+     *
+     * The whole shape, not just its widest point — because the widest point is
+     * *not* where a motif comes closest to its neighbour. A point sits a fixed
+     * number of millimetres round the circle from its own centreline whatever
+     * radius it is at, so the angular room it eats grows as the radius shrinks:
+     * the gap at a point is 2·(π/n·r − x·h), which falls as r falls. An arrow's
+     * fletching is a little narrower than its head and much further in, and it
+     * is the fletching that decides how close two arrows get.
+     */
+    aWide: UV[];
+    /** the middle of its bounding box, which is what the echo shrinks about */
+    midX: number;
+    midY: number;
+    /** whether a scaled copy inside itself adds anything, or it is busy already */
+    echo: boolean;
+}
+
+/** The paisley's spine, which both its outline and its inner dot are hung on. */
+const BOTEH = Array.from({ length: 20 }, (_, i) => {
+    const s = i / 19;
+    return { x: -0.09 + 0.40 * Math.sin(Math.PI * 0.60 * s), y: 0.17 + 0.72 * s };
+});
+
+const SHAPES: Record<ComposedMotif, UV[][]> = {
+    // A shaft with a chevron head and a fletched tail. Angular, and the only
+    // motif in the set that points — a ring of them reads as rotation, which
+    // nothing made from a symmetric profile can do.
+    arrow: [[
+        { x: 0, y: 1 },
+        { x: W, y: 0.62 }, { x: 0.15, y: 0.62 },
+        { x: 0.15, y: 0.20 },
+        { x: 0.33, y: 0.02 }, { x: 0, y: 0.21 }, { x: -0.33, y: 0.02 },
+        { x: -0.15, y: 0.20 },
+        { x: -0.15, y: 0.62 }, { x: -W, y: 0.62 }
+    ]],
+    // Five points, the first aimed at the rim.
+    star: [uvStar(0.5, W, W * 0.42, 5)],
+    // A rosette: six petals round a middle. The one motif that is unmistakably
+    // an assembly, and the reason the whole indirection exists.
+    flower: [
+        ...Array.from({ length: 6 }, (_, k) => uvPetal(0.5, (k * Math.PI) / 3, 0.10, W, 0.105)),
+        uvCircle(0, 0.5, 0.075)
+    ],
+    // A boteh: round at the bottom, curling to a point. Asymmetric on purpose —
+    // it is the shape that most says "drawn by hand".
+    paisley: [
+        ribbon(BOTEH, s => 0.40 * (1 - s) ** 0.62, true),
+        uvCircle(BOTEH[3]!.x, BOTEH[3]!.y, 0.085)
+    ],
+    // A moon: an arc thick in the middle and tapering to horns at both ends.
+    crescent: [ribbon(uvArc(0.10, 0.5, 0.33, Math.PI * 0.62, Math.PI * 1.38, 20), s => 0.26 * Math.sin(Math.PI * s) ** 0.55)],
+    // A V-bar. The running border every printed mandala has somewhere.
+    chevron: [ribbon(roundCorners([{ x: -W, y: 0.16 }, { x: 0, y: 0.84 }, { x: W, y: 0.16 }], 0.10), () => 0.13)],
+    // A Greek key. A line that turns four corners is not something a profile
+    // function can express at all.
+    fret: [ribbon(roundCorners([
+        { x: -0.36, y: 0.14 },
+        { x: 0.36, y: 0.14 },
+        { x: 0.36, y: 0.86 },
+        { x: -0.18, y: 0.86 },
+        { x: -0.18, y: 0.40 },
+        { x: 0.17, y: 0.40 },
+        { x: 0.17, y: 0.63 }
+    ], 0.055), () => 0.085)]
+};
+
+/**
+ * Which composed motifs a smaller copy of themselves fits inside.
+ *
+ * Only the solid ones. A scaled copy of a *thin* shape does not land inside its
+ * parent, it lands in the parent's hollow and crosses the outline on the way —
+ * a half-size crescent sits in the bite of the moon, not in the moon. So the
+ * echo is for the star and the arrow; the crescent, the chevron and the key are
+ * already a line of constant thickness with nothing to nest into, and the
+ * rosette and the paisley carry their own middles.
+ */
+const ECHOES: Record<ComposedMotif, boolean> = {
+    star: true, arrow: true,
+    crescent: false, chevron: false, fret: false, flower: false, paisley: false
+};
+
+/** A composed motif's rings, measured so the layout knows how it sits. */
+const measure = (rings: UV[][], echo: boolean): Composed => {
+    let minY = Infinity,
+        maxY = -Infinity,
+        minX = Infinity,
+        maxX = -Infinity;
+    const aWide: UV[] = [];
+    for (const a of rings) {
+        for (const q of a) {
+            if (q.y < minY) minY = q.y;
+            if (q.y > maxY) maxY = q.y;
+            if (q.x < minX) minX = q.x;
+            if (q.x > maxX) maxX = q.x;
+            // Only the outward-facing half matters, mirrored: a motif is
+            // squeezed between the two neighbours it has, and both are the same
+            // shape reflected.
+            if (Math.abs(q.x) > 1e-4) aWide.push({ x: Math.abs(q.x), y: q.y });
+        }
+    }
+    return {
+        rings,
+        aWide: aWide.length ? aWide : [{ x: 1e-4, y: 0.5 }],
+        // The middle of the shape, which is what an echo has to shrink about.
+        // Not the widest row: shrinking a star about its widest row slides the
+        // small one up out of the big one.
+        midX: isFinite(minX) ? (minX + maxX) / 2 : 0,
+        midY: isFinite(minY) ? (minY + maxY) / 2 : 0.5,
+        echo
+    };
+};
+
+const COMPOSED: Record<ComposedMotif, Composed> = Object.fromEntries(
+    (Object.keys(SHAPES) as ComposedMotif[]).map(k => [k, measure(SHAPES[k], ECHOES[k])])
+) as Record<ComposedMotif, Composed>;
+
+const isComposed = (m: Motif): m is ComposedMotif => m in COMPOSED;
+
+/**
+ * A ring of motif space put on the disc.
+ *
+ * `squash` narrows the shape across the slot when symmetry alone would make two
+ * neighbours touch. Across only, never along: shrinking both would leave a gap
+ * at the inner and outer edges of the band and the ring would stop reading as a
+ * band at all.
+ */
+const placeUV = (
+    aPt: UV[],
+    centre: Point,
+    r0: number,
+    h: number,
+    angle: number,
+    squash: number
+): Point[] =>
+    aPt.map(q => {
+        const r = r0 + h * q.y,
+            a = angle + (q.x * squash * h) / Math.max(1e-6, r);
+        return { x: centre.x + r * Math.cos(a), y: centre.y + r * Math.sin(a) };
+    });
+
+/** A shape scaled about its own middle, for the echo. */
+const shrinkUV = (aPt: UV[], k: number, cx: number, cy: number): UV[] =>
+    aPt.map(q => ({ x: cx + (q.x - cx) * k, y: cy + (q.y - cy) * k }));
+
 /** The motifs that are a shape in a band, as against a ring of circles. */
-const BANDS = (Object.keys(PROFILE) as Motif[]).filter(m => m !== "dots");
+const BANDS: Motif[] = [
+    ...(Object.keys(PROFILE) as BandMotif[]),
+    ...(Object.keys(COMPOSED) as ComposedMotif[])
+];
 
 /**
  * A ring of small circles.
@@ -271,7 +607,6 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
                 : BANDS[Math.floor(next() * BANDS.length)]!)
             : opt.style;
         aMotifKind.push(motif);
-        const profile = PROFILE[motif];
 
         // Every other ring is turned half a slot, so the pattern reads as a
         // weave rather than as spokes lining up all the way out.
@@ -283,6 +618,42 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
             web = Math.min(web, ((2 * Math.PI * ((r.r0 + r.r1) / 2)) / n) * 0.24);
             continue;
         }
+
+        if (isComposed(motif)) {
+            // A composed motif keeps the proportions it was drawn with. It is
+            // narrowed across the slot when symmetry demands it and otherwise
+            // left alone — so one that was authored narrower than the full
+            // width simply leaves more air round itself, rather than being
+            // stretched to fill a slot it was never meant to fill.
+            const shape = COMPOSED[motif],
+                h = r.r1 - r.r0;
+
+            // Both of these are worked out over every point of the shape rather
+            // than over its widest one — see `aWide`.
+            let squash = 1;
+            for (const q of shape.aWide) {
+                const rq = r.r0 + h * q.y;
+                squash = Math.min(squash, (slotHalf * rq) / (q.x * h));
+            }
+            for (const q of shape.aWide) {
+                const rq = r.r0 + h * q.y;
+                web = Math.min(web, 2 * ((Math.PI / n) * rq - q.x * squash * h));
+            }
+
+            for (let k = 0; k < n; k++) {
+                const a = phase + (2 * Math.PI * k) / n;
+                for (const ring of shape.rings) aMotif.push(placeUV(ring, centre, r.r0, h, a, squash));
+                if (bNested && shape.echo) {
+                    for (const ring of shape.rings) {
+                        aMotif.push(placeUV(shrinkUV(ring, 0.5, shape.midX, shape.midY), centre, r.r0, h, a, squash));
+                    }
+                }
+            }
+            nMotif += n;
+            continue;
+        }
+
+        const profile = PROFILE[motif];
 
         // Where the motif is at its widest, and therefore where the material
         // between two of them is at its narrowest.

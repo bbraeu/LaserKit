@@ -59,7 +59,18 @@ const STYLES = [
     { id: "dart" as const, label: "Darts", hint: "Triangles standing on the hub and widening to the rim — a sunburst when there is only one ring of them." },
     { id: "spoke" as const, label: "Spokes", hint: "Nearly parallel sides with rounded ends. The most open of the set, and the strongest when cut." },
     { id: "scallop" as const, label: "Scallops", hint: "Fat almost all the way out, so what is left between them is a thin rib. Handsome engraved, fragile cut." },
-    { id: "dots" as const, label: "Dots", hint: "A ring of small circles instead of a band of shapes. On its own it is a bead ring; between two bands it is the punctuation that stops a mandala reading as concentric fences." }
+    { id: "dots" as const, label: "Dots", hint: "A ring of small circles instead of a band of shapes. On its own it is a bead ring; between two bands it is the punctuation that stops a mandala reading as concentric fences." },
+    // ── the composed ones ───────────────────────────────────────────────
+    //
+    // Everything above is one curve, symmetric about its slot. These are
+    // assemblies, which is why they can be shapes the first eight cannot reach.
+    { id: "flower" as const, label: "Rosettes", hint: "Six petals round a middle — a whole little flower as one motif, rather than one petal repeated. The most ornate of the set." },
+    { id: "star" as const, label: "Stars", hint: "Five points, the first aimed at the rim. Two radii instead of one, which is exactly what a petal shape cannot do." },
+    { id: "arrow" as const, label: "Arrows", hint: "A shaft with a chevron head and a fletched tail. The only motif that points, so a ring of them reads as rotation." },
+    { id: "paisley" as const, label: "Paisley", hint: "A boteh: round at the bottom, curling to a point, with a dot in the belly. Asymmetric on purpose — the shape that most looks drawn by hand." },
+    { id: "crescent" as const, label: "Crescents", hint: "Moons, thick in the middle and tapering to a horn at each end. Reads as motion round the circle." },
+    { id: "chevron" as const, label: "Chevrons", hint: "A plain V-bar with rounded corners. The running border every printed mandala has somewhere, and the most open of the composed set." },
+    { id: "fret" as const, label: "Greek key", hint: "A line that turns four corners. Angular and architectural — one ring of it under a ring of rosettes is the classic pairing." }
 ];
 
 const MODES = [

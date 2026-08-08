@@ -30,6 +30,19 @@ export const REPO = "https://github.com/bbraeu/LaserKit";
 
 export const RELEASES: Release[] = [
     {
+        version: "3.14.0",
+        date: "2026-08-08",
+        title: "Mandala motifs that are built rather than sampled",
+        tools: ["mandala"],
+        notes: [
+            "Seven new motifs: rosettes, stars, arrows, paisley, crescents, chevrons and a Greek key.",
+            "The first eight motifs were all the same kind of shape, and that was the ceiling. Each was one closed curve, symmetric about its slot and bulging outwards — so it could be a petal, a lens, a rhombus or a slot, and it could never be a star (two radii), an arrow (not symmetric end to end) or a rosette (seven shapes rather than one). No amount of taste in the curve gets there.",
+            "The new ones are drawn in a coordinate system of their own — as any number of closed rings made of straight runs, arcs and thickened centrelines — and then bent onto the band so a point sits the same distance round the circle whatever radius it lands at. That is what stops a star being a starfish on the inner ring and a snowflake on the outer.",
+            "Mixed now draws from fifteen motifs instead of eight, so the preset most people start from is a good deal less predictable.",
+            "The web is now worked out over every point of a motif rather than its widest one. The widest point is not where two neighbours come closest: a point eats a fixed number of millimetres of the circle whatever radius it is at, so the room it takes grows as the radius shrinks. An arrow's fletching is narrower than its head and much further in, and it is the fletching that decides the gap — the old figure was optimistic by about half a millimetre for shapes like that."
+        ]
+    },
+    {
         version: "3.13.0",
         date: "2026-08-08",
         title: "Calendar cards, frames, and a tray to keep them in",
