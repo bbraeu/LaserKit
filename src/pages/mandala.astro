@@ -59,7 +59,7 @@ import MandalaTool from "../tools/MandalaTool";
             </div>
 
             <div class="glass reveal mt-5 rounded-2xl p-6">
-                <h2 class="text-lg font-semibold text-white">Eight simple motifs, and seven built ones</h2>
+                <h2 class="text-lg font-semibold text-white">Eight simple motifs, and seventeen built ones</h2>
                 <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
                     The first eight are not arbitrary. Every guide to drawing a mandala reaches for the same handful —
                     teardrops, pointed petals, dots, triangles, arcs, diamonds — because those are the shapes that
@@ -73,7 +73,7 @@ import MandalaTool from "../tools/MandalaTool";
                     is seven shapes rather than one. No amount of taste in the curve gets you there.
                 </p>
                 <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
-                    So the seven below are drawn a different way: in a little coordinate system of their own, as any
+                    So the seventeen below are drawn a different way: in a little coordinate system of their own, as any
                     number of closed rings made of straight runs, arcs and thickened centrelines, and then bent onto
                     the band. Those are the shapes a clip-art mandala kit is full of, and they are what makes a ring
                     read as designed rather than sampled.
@@ -143,7 +143,92 @@ import MandalaTool from "../tools/MandalaTool";
                         <dt class="font-semibold text-slate-200">Greek key</dt>
                         <dd class="mt-1 text-slate-400">A line that turns four corners. Angular and architectural; one ring of it under a ring of rosettes is the oldest pairing there is.</dd>
                     </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Squares &amp; hexagons</dt>
+                        <dd class="mt-1 text-slate-400">Flat sides and corners. The plainest way to make a ring read as architecture rather than as a flower. The hexagons stand on their points and are sized so the shoulders, not the vertices, are what nearly touches the neighbour.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Eight-pointed stars</dt>
+                        <dd class="mt-1 text-slate-400">Shallower notches than the five-pointed one, so they survive being repeated forty times where the five turns into a blur.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Small circles</dt>
+                        <dd class="mt-1 text-slate-400">A circle with another inside it. The plainest motif here and the one that does the most work — a ring of them between two busy bands is what stops the whole disc reading as one texture.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Spirals</dt>
+                        <dd class="mt-1 text-slate-400">Two and a half turns each. Busy: give them a deep band and a low symmetry, or they close up into discs.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">S-curves</dt>
+                        <dd class="mt-1 text-slate-400">Two bends the same size in opposite directions. Because alternate rings are already turned half a slot, a band of them reads as a running braid without any two of them touching.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Vines &amp; leaves</dt>
+                        <dd class="mt-1 text-slate-400">A stem with leaves alternating along it, swept back towards the root the way a real one grows. The only motif in the set symmetric about nothing at all.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Lattice</dt>
+                        <dd class="mt-1 text-slate-400">Cross-hatch inside a border, clipped to it. Hatching that runs past its own border is not a lattice, it is a scribble with a box drawn round it.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Line focus</dt>
+                        <dd class="mt-1 text-slate-400">Parallel lines leaning across the slot. Straight radial ones would line up with the next ring's and read as a fence; the lean makes a band of them read as a twist.</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-slate-200">Radiating axes</dt>
+                        <dd class="mt-1 text-slate-400">A spike from the inner edge to the outer with a lozenge near its end — the axis a hand-drawn mandala rules in before anything is drawn on it.</dd>
+                    </div>
                 </dl>
+            </div>
+
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">Bands are as tall as what is in them</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    The rings used to split the radius evenly, and that was the single thing that most made a generated
+                    mandala look generated. A hand-drawn one is a stack of bands of <em>different</em> heights: a
+                    thread of dots, then a deep band of lotus petals, then a narrow line of hatching, then rosettes.
+                    Equal bands turn all of that into a set of concentric fences, and no choice of motif rescues it —
+                    a ring of dots given a rosette's room is mostly empty space, and the rosettes are cramped by
+                    exactly the same measure.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    So each motif asks for the room it needs and the ring heights follow. Dots and hatching take about
+                    half a share; rosettes take a third more than one.
+                </p>
+            </div>
+
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">Composing a stack by hand</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    Almost every control here moves the whole drawing, deliberately. There is one exception, and it
+                    earns it: <strong class="text-slate-300">which motif goes in which ring</strong>. A mandala worth
+                    cutting is stacked — busy, quiet, busy, quiet — and that is a decision per ring which nothing else
+                    can express.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    It stays out of the way. The rings arrive filled in from the seed, so nobody is ever looking at a
+                    column of empty dropdowns; change one and the rest freeze exactly as they were, because otherwise
+                    nudging the symmetry afterwards would reshuffle everything you had not touched. One button hands
+                    them back to the seed.
+                </p>
+            </div>
+
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">Two directions of space</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    <strong class="text-slate-300">Between motifs</strong> opens them up sideways, within their own
+                    ring, as a share of the slot each one gets.
+                    <strong class="text-slate-300">Motif height</strong> opens them up along the radius, by leaving air
+                    at the top and bottom of every band. Both are needed: a motif squeezed sideways but still touching
+                    the edges of its band reads as cramped whatever the symmetry, and no value of the first reaches
+                    that.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    Cut, both are material. The figure in the status bar for the space between rings counts the gap
+                    between the bands <em>plus</em> the air the motifs leave at their own edges — reporting the gap
+                    alone would understate it by the whole of the height control the moment that was turned down.
+                </p>
             </div>
 
             <div class="glass reveal mt-5 rounded-2xl p-6">

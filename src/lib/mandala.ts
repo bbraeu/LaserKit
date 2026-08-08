@@ -76,7 +76,17 @@ export type BandMotif = "petal" | "lotus" | "drop" | "spoke" | "scallop" | "diam
  * between two radii, an arrow is not symmetric end to end, a rosette is seven
  * rings rather than one, and a Greek key is a line that turns corners.
  */
-export type ComposedMotif = "arrow" | "star" | "flower" | "paisley" | "crescent" | "chevron" | "fret";
+export type ComposedMotif =
+    | "arrow" | "star" | "flower" | "paisley" | "crescent" | "chevron" | "fret"
+    // The geometric family: the shapes every "how to build a mandala" sheet
+    // opens with, and the ones a petal profile is furthest from being able to
+    // draw.
+    | "square" | "hexagon" | "star8" | "rings"
+    // Fill and line work, which is what a mandala uses to make one band read as
+    // quieter than the band next to it.
+    | "lattice" | "hatch" | "ray"
+    // Curves.
+    | "spiral" | "scurve" | "vine";
 
 export type Motif = BandMotif | ComposedMotif | "dots";
 
@@ -101,6 +111,25 @@ export interface MandalaOptions {
     gap: number;
     /** material between one ring and the next, mm */
     ringGap: number;
+    /**
+     * How much of its band's height a motif fills, 0.3…1.
+     *
+     * The other half of "space between the elements". `gap` opens them up
+     * sideways, within their ring; this opens them up along the radius, by
+     * leaving air at the inner and outer edge of every band. Both are needed:
+     * a motif squeezed sideways but still touching its band's edges reads as
+     * cramped whatever the symmetry.
+     */
+    bandFill: number;
+    /**
+     * A motif per ring, inside out, overriding the style.
+     *
+     * Null for the usual behaviour — one motif everywhere, or a seed picking
+     * them. A mandala worth cutting is usually *stacked*: dots, then petals,
+     * then a line of hatching, then rosettes. That is a decision per ring and
+     * nothing else can express it.
+     */
+    layers: Motif[] | null;
     /** plain disc in the middle, as a share of the radius */
     hub: number;
     /** a hole through the middle to hang it by, mm — 0 for none */
@@ -154,6 +183,8 @@ export interface MandalaResult {
     web: number;
     /** the material between rings, mm */
     ringWeb: number;
+    /** which motif ended up in which ring, inside out */
+    aMotifKind: Motif[];
     points: number;
     warnings: string[];
 }
@@ -357,6 +388,47 @@ const uvPetal = (cy: number, th: number, r0: number, r1: number, hw: number, seg
     return out;
 };
 
+/** A regular polygon with one vertex aimed out along the band. */
+const uvPolygon = (cy: number, r: number, sides: number): UV[] =>
+    Array.from({ length: sides }, (_, k) => {
+        const th = (2 * Math.PI * k) / sides;
+        return { x: r * Math.sin(th), y: cy + r * Math.cos(th) };
+    });
+
+/**
+ * A line at 45° across a square, cut off at the square's edges.
+ *
+ * Needed for the lattice: hatching that runs past its own border is not a
+ * lattice, it is a scribble with a box drawn round it. Written out rather than
+ * reached for from a library because it is four candidate crossings and a
+ * pick-the-two, and a general polygon clipper here would be a hundred lines
+ * doing the same job worse.
+ */
+const diagonalIn = (cy: number, a: number, c: number, slope: 1 | -1): [UV, UV] | null => {
+    const hit: UV[] = [];
+    for (const x of [-a, a]) {
+        const y = slope * x + c;
+        if (Math.abs(y) <= a + 1e-9) hit.push({ x, y: cy + y });
+    }
+    for (const y of [-a, a]) {
+        const x = (y - c) / slope;
+        if (Math.abs(x) < a - 1e-9) hit.push({ x, y: cy + y });
+    }
+    if (hit.length < 2) return null;
+    const p = hit[0]!,
+        q = hit.reduce((best, o) => (Math.hypot(o.x - p.x, o.y - p.y) > Math.hypot(best.x - p.x, best.y - p.y) ? o : best), hit[1]!);
+    return Math.hypot(q.x - p.x, q.y - p.y) < 0.02 ? null : [p, q];
+};
+
+/** An Archimedean spiral, as a centreline to be thickened. */
+const uvSpiral = (cy: number, r0: number, r1: number, turns: number, segs = 60): UV[] =>
+    Array.from({ length: segs + 1 }, (_, i) => {
+        const t = i / segs,
+            th = 2 * Math.PI * turns * t,
+            r = r0 + (r1 - r0) * t;
+        return { x: r * Math.sin(th), y: cy + r * Math.cos(th) };
+    });
+
 /** A composed motif, with what the layout needs to know about it. */
 interface Composed {
     rings: UV[][];
@@ -426,7 +498,100 @@ const SHAPES: Record<ComposedMotif, UV[][]> = {
         { x: -0.18, y: 0.40 },
         { x: 0.17, y: 0.40 },
         { x: 0.17, y: 0.63 }
-    ], 0.055), () => 0.085)]
+    ], 0.055), () => 0.085)],
+
+    // ── the geometric family ────────────────────────────────────────────
+    //
+    // The shapes every "how to build a mandala" sheet opens with. They are the
+    // furthest thing from a petal profile there is: flat sides and corners, and
+    // a fixed number of them.
+
+    // Corners taken off, because a square with knife-edge corners in a ring of
+    // twenty reads as a saw rather than as a row of squares.
+    square: [roundCorners([
+        { x: -W, y: 0.5 - W }, { x: W, y: 0.5 - W }, { x: W, y: 0.5 + W },
+        { x: -W, y: 0.5 + W }, { x: -W, y: 0.5 - W }, { x: W, y: 0.5 - W }
+    ], 0.09).slice(2, -2)],
+    // Sized so it is exactly as wide as everything else: a hexagon on its point
+    // is widest at its two shoulders, not at its vertices.
+    hexagon: [uvPolygon(0.5, W / Math.sin(Math.PI / 3), 6)],
+    // Eight points rather than five. The extra points mean shallower notches,
+    // so it survives being repeated forty times where the five-pointed one
+    // turns into a blur.
+    star8: [uvStar(0.5, W, W * 0.46, 8)],
+    // Two circles, one inside the other. The plainest motif in the set and the
+    // one that does the most work: a ring of them between two busy bands is
+    // what stops a mandala reading as one continuous texture.
+    rings: [uvCircle(0, 0.5, W, 26), uvCircle(0, 0.5, W * 0.55, 20)],
+
+    // ── fill and line work ──────────────────────────────────────────────
+    //
+    // Not shapes so much as textures. A mandala needs bands that are quieter
+    // than their neighbours, and a band of pattern is quieter than a band of
+    // figures.
+
+    // Cross-hatch inside a border, clipped to it.
+    lattice: [
+        roundCorners([
+            { x: -W, y: 0.5 - W }, { x: W, y: 0.5 - W }, { x: W, y: 0.5 + W },
+            { x: -W, y: 0.5 + W }, { x: -W, y: 0.5 - W }, { x: W, y: 0.5 - W }
+        ], 0.07).slice(2, -2),
+        ...[-0.42, 0, 0.42].flatMap(c =>
+            ([1, -1] as const)
+                .map(slope => diagonalIn(0.5, W * 0.86, c, slope))
+                .filter((o): o is [UV, UV] => o !== null)
+                .map(([p, q]) => ribbon([p, q], () => 0.045)))
+    ],
+    // Parallel lines leaning across the slot. Straight radial ones would line
+    // up with the neighbouring ring's and read as a fence; the lean is what
+    // makes a band of them read as a twist.
+    hatch: [-0.30, -0.15, 0, 0.15, 0.30].map(x0 =>
+        ribbon([{ x: x0 - 0.09, y: 0.06 }, { x: x0 + 0.09, y: 0.94 }], () => 0.05)),
+    // A spike from the inner edge to the outer with a lozenge near its end:
+    // the radiating axis that a hand-drawn mandala uses to divide the ring
+    // before anything is drawn in it.
+    ray: [
+        ribbon([{ x: 0, y: 0.04 }, { x: 0, y: 0.96 }], s => 0.11 * (1 - 0.82 * s) + 0.015),
+        [
+            { x: 0, y: 0.62 }, { x: W * 0.62, y: 0.78 }, { x: 0, y: 0.94 }, { x: -W * 0.62, y: 0.78 }
+        ]
+    ],
+
+    // ── curves ──────────────────────────────────────────────────────────
+
+    spiral: [ribbon(uvSpiral(0.5, 0.045, W, 2.6), () => 0.075)],
+    // Two bends the same size in opposite directions. Alternate rings are
+    // already turned half a slot, so a band of these reads as a running braid
+    // without any of them touching.
+    scurve: [ribbon(
+        Array.from({ length: 30 }, (_, i) => {
+            const s = i / 29;
+            return { x: 0.30 * Math.sin(2 * Math.PI * s), y: 0.06 + 0.88 * s };
+        }),
+        s => 0.10 * Math.sin(Math.PI * s) ** 0.35 + 0.02
+    )],
+    // A stem with leaves alternating along it. The one motif here that is
+    // deliberately not symmetric about anything, which is what makes a ring of
+    // them read as growth rather than as pattern.
+    vine: (() => {
+        const stem = Array.from({ length: 26 }, (_, i) => {
+            const s = i / 25;
+            return { x: 0.20 * Math.sin(Math.PI * 1.15 * s) - 0.05, y: 0.05 + 0.90 * s };
+        });
+        const out: UV[][] = [ribbon(stem, s => 0.075 * (1 - 0.72 * s) + 0.012)];
+        for (const [k, at] of [0.26, 0.50, 0.74, 0.94].entries()) {
+            const i = Math.round(at * (stem.length - 1)),
+                p = stem[i]!,
+                q = stem[Math.max(0, i - 1)]!,
+                along = Math.atan2(p.y - q.y, p.x - q.x),
+                // Alternating sides, and swept back towards the stem's root the
+                // way a real one grows.
+                side = k % 2 === 0 ? 1 : -1,
+                th = along + side * 1.15;
+            out.push(uvPetal(0, th, 0.02, 0.20, 0.052, 10).map(o => ({ x: o.x + p.x, y: o.y + p.y })));
+        }
+        return out;
+    })()
 };
 
 /**
@@ -440,12 +605,71 @@ const SHAPES: Record<ComposedMotif, UV[][]> = {
  * rosette and the paisley carry their own middles.
  */
 const ECHOES: Record<ComposedMotif, boolean> = {
-    star: true, arrow: true,
-    crescent: false, chevron: false, fret: false, flower: false, paisley: false
+    star: true, arrow: true, square: true, hexagon: true, star8: true,
+    // Every one of these is either a line of constant thickness or already has
+    // something inside it.
+    crescent: false, chevron: false, fret: false, flower: false, paisley: false,
+    rings: false, lattice: false, hatch: false, ray: false,
+    spiral: false, scurve: false, vine: false
+};
+
+/**
+ * How tall a band each motif wants, relative to the others.
+ *
+ * Rings used to be given equal shares of the radius, and that is the single
+ * thing that most made a generated mandala look generated. A hand-drawn one is
+ * a stack of bands of *different* heights: a thread of dots, then a deep band
+ * of lotus petals, then a narrow line of hatching, then rosettes. Equal bands
+ * turn all of that into a set of concentric fences, and no choice of motif
+ * rescues it — a ring of dots given the same height as a ring of rosettes is
+ * mostly empty space, and the rosettes are cramped in exactly the same measure.
+ *
+ * So a motif asks for the room it needs and the ring heights follow.
+ */
+const WEIGHT: Record<Motif, number> = {
+    // Punctuation: thin on purpose.
+    dots: 0.45, hatch: 0.55, rings: 0.75, chevron: 0.7, ray: 0.8, fret: 0.9, crescent: 0.9,
+    // The ordinary band motifs.
+    petal: 1, lotus: 1.1, drop: 1, spoke: 1, scallop: 0.9, diamond: 1, dart: 1,
+    square: 1, hexagon: 1, star: 1, star8: 1, lattice: 1, scurve: 1, vine: 1.05,
+    // The ones with detail inside them, which need the room to show it.
+    arrow: 1.15, spiral: 1.15, paisley: 1.2, flower: 1.35
+};
+
+/**
+ * A shape pulled back inside its own band.
+ *
+ * The band is y ∈ [0, 1] and a motif that leaves it leaves its ring — on the
+ * outermost ring, that means leaving the disc. It is an easy thing to do by
+ * accident: the vine's leaves are hung off points along its stem, so the top
+ * leaf reached a fifth of a band past the end of it, and the tree of a mistake
+ * is not visible until the outer ring is the one that has it.
+ *
+ * Enforced here, once, rather than by being careful in twenty-five places. The
+ * x axis is scaled by the same factor so nothing is squashed on the way in —
+ * a motif that has to shrink to fit should come out smaller, not squatter.
+ */
+const fitToBand = (rings: UV[][]): UV[][] => {
+    let lo = Infinity,
+        hi = -Infinity;
+    for (const a of rings) {
+        for (const q of a) {
+            if (q.y < lo) lo = q.y;
+            if (q.y > hi) hi = q.y;
+        }
+    }
+    if (!isFinite(lo) || (lo >= -1e-9 && hi <= 1 + 1e-9)) return rings;
+    const k = Math.min(1, 1 / (hi - lo)),
+        mid = (lo + hi) / 2,
+        // Re-centred on the band as well as scaled, or a shape that only
+        // overshot at the top would come back sitting low.
+        shift = 0.5 - mid * k;
+    return rings.map(a => a.map(q => ({ x: q.x * k, y: q.y * k + shift })));
 };
 
 /** A composed motif's rings, measured so the layout knows how it sits. */
-const measure = (rings: UV[][], echo: boolean): Composed => {
+const measure = (rawRings: UV[][], echo: boolean): Composed => {
+    const rings = fitToBand(rawRings);
     let minY = Infinity,
         maxY = -Infinity,
         minX = Infinity,
@@ -480,6 +704,17 @@ const COMPOSED: Record<ComposedMotif, Composed> = Object.fromEntries(
 ) as Record<ComposedMotif, Composed>;
 
 const isComposed = (m: Motif): m is ComposedMotif => m in COMPOSED;
+
+/** Every motif there is, inside out through the picker's own order. */
+export const MOTIFS: Motif[] = [
+    "lotus", "petal", "drop", "scallop", "spoke", "diamond", "dart",
+    "flower", "star", "star8", "square", "hexagon", "rings",
+    "arrow", "paisley", "crescent", "chevron", "fret",
+    "spiral", "scurve", "vine", "lattice", "hatch", "ray", "dots"
+];
+
+/** Is this string one of them? Layers arrive from a saved URL, so it is asked. */
+export const isMotif = (s: string): s is Motif => (MOTIFS as string[]).includes(s);
 
 /**
  * A ring of motif space put on the disc.
@@ -569,13 +804,53 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
         centre: Point = { x: R, y: R },
         next = rng(opt.seed);
 
-    // The bands the rings occupy, inside out.
+    // ── which motif goes in which ring ──────────────────────────────────
+    //
+    // Decided before anything is measured, because the ring heights follow
+    // from it: a band of dots wants a thread and a band of rosettes wants a
+    // deep band, and which is which cannot be known until the motifs are.
+    const aMotifKind: Motif[] = [];
+    for (let i = 0; i < rings; i++) {
+        const chosen = opt.layers?.[i];
+        aMotifKind.push(
+            chosen && isMotif(chosen)
+                ? chosen
+                // Mixed never puts two dot rings together and never opens on
+                // one: a ring of dots is punctuation, and punctuation on its
+                // own is not a sentence.
+                : opt.style === "mixed"
+                    ? (i > 0 && next() < 0.28 && aMotifKind[i - 1] !== "dots"
+                        ? "dots"
+                        : BANDS[Math.floor(next() * BANDS.length)]!)
+                    : opt.style
+        );
+    }
+
+    // The bands the rings occupy, inside out, each as tall as its own motif
+    // asked for. Equal bands were what most made a generated mandala look
+    // generated — see WEIGHT.
     const span = Math.max(0, R - hub - ringGap * rings),
-        band = span / rings,
-        aRing = Array.from({ length: rings }, (_, i) => ({
-            r0: hub + ringGap * (i + 1) + band * i,
-            r1: hub + ringGap * (i + 1) + band * (i + 1)
-        }));
+        totalWeight = aMotifKind.reduce((s, m) => s + WEIGHT[m], 0) || 1,
+        aRing: { r0: number; r1: number }[] = [];
+    let atR = hub;
+    for (const m of aMotifKind) {
+        atR += ringGap;
+        const h = (span * WEIGHT[m]) / totalWeight;
+        aRing.push({ r0: atR, r1: atR + h });
+        atR += h;
+    }
+    const band = rings ? span / rings : 0;
+
+    /** A motif's own inner and outer radius: its band, less the air round it. */
+    // `?? 1` rather than leaning on the clamp: `clamp` answers with its *lower*
+    // bound for anything that is not a number, so an options object built
+    // without this field would silently shrink every motif to a third of its
+    // band rather than leaving it alone.
+    const fill = clamp(opt.bandFill ?? 1, 0.3, 1),
+        insetOf = (r: { r0: number; r1: number }) => {
+            const pad = ((r.r1 - r.r0) * (1 - fill)) / 2;
+            return { r0: r.r0 + pad, r1: r.r1 - pad };
+        };
 
     // The widest a motif may be. Two limits, and the second one is what makes
     // this look like a mandala rather than a scatter of blobs: a motif is
@@ -592,21 +867,15 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
     // Nesting is an engraved idea: a smaller hole inside a hole is a ring of
     // material that falls out on its own.
     const bNested = opt.nested && opt.mode !== "cut",
-        aMotif: Point[][] = [],
-        aMotifKind: Motif[] = [];
+        aMotif: Point[][] = [];
     let web = Infinity,
         nMotif = 0;
 
-    for (const [i, r] of aRing.entries()) {
-        // Mixed never puts two dot rings together and never opens on one: a
-        // ring of dots is punctuation, and punctuation on its own is not a
-        // sentence.
-        const motif: Motif = opt.style === "mixed"
-            ? (i > 0 && next() < 0.28 && aMotifKind[i - 1] !== "dots"
-                ? "dots"
-                : BANDS[Math.floor(next() * BANDS.length)]!)
-            : opt.style;
-        aMotifKind.push(motif);
+    for (const [i, band0] of aRing.entries()) {
+        const motif = aMotifKind[i]!,
+            // What the motif itself gets, which is its band less the air the
+            // spacing control leaves at either edge.
+            r = insetOf(band0);
 
         // Every other ring is turned half a slot, so the pattern reads as a
         // weave rather than as spokes lining up all the way out.
@@ -754,7 +1023,12 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
         height: size,
         motifs: nMotif,
         web,
-        ringWeb: ringGap,
+        // The material actually left between one ring of pattern and the next:
+        // the gap between the bands plus the air the motifs leave at each of
+        // their own edges. Reporting the gap alone would understate it by the
+        // whole of the spacing control the moment that was turned down.
+        ringWeb: ringGap + (rings > 1 ? band * (1 - fill) : 0),
+        aMotifKind,
         points: aLayer.reduce((a, l) => a + l.rings.reduce((m, r) => m + r.length, 0), 0),
         warnings
     };

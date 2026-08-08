@@ -23,7 +23,9 @@ const BASE: MandalaOptions = {
     nested: false,
     mode: "engrave",
     outline: true,
-    seed: 1
+    seed: 1,
+    bandFill: 1,
+    layers: null
 };
 
 const mandala = (patch: Partial<MandalaOptions> = {}) => buildMandala({ ...BASE, ...patch });
@@ -32,7 +34,11 @@ const mandala = (patch: Partial<MandalaOptions> = {}) => buildMandala({ ...BASE,
 const BAND = ["petal", "lotus", "drop", "spoke", "scallop", "diamond", "dart"] as const;
 
 /** The seven that are an assembly drawn in motif space. */
-const COMPOSED = ["arrow", "star", "flower", "paisley", "crescent", "chevron", "fret"] as const;
+const COMPOSED = [
+    "arrow", "star", "flower", "paisley", "crescent", "chevron", "fret",
+    "square", "hexagon", "star8", "rings", "lattice", "hatch", "ray",
+    "spiral", "scurve", "vine"
+] as const;
 
 const ALL = [...BAND, "dots", ...COMPOSED] as const;
 
@@ -278,5 +284,102 @@ describe("cut and engrave", () => {
     it("comes out the diameter asked for", () => {
         expect(mandala({ size: 90 }).width).toBe(90);
         expect(mandalaToSvg(mandala({ size: 90 }))).toContain('width="90mm"');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Bands, spacing and the stack.
+// ---------------------------------------------------------------------------
+
+/** How far out each ring of motifs sits, as [innermost radius, outermost]. */
+const bandsOf = (r: ReturnType<typeof mandala>): [number, number][] => {
+    const c = r.width / 2,
+        all = r.aLayer.filter(l => l.operation.css !== "#ff0000").flatMap(l => l.rings);
+    // Group by which ring a shape belongs to by its own middle radius, which is
+    // enough here because the bands never overlap.
+    return all.map(a => {
+        const aR = a.map(p => Math.hypot(p.x - c, p.y - c));
+        return [Math.min(...aR), Math.max(...aR)] as [number, number];
+    });
+};
+
+describe("bands sized by what is in them", () => {
+    it("gives a ring of dots less room than a ring of rosettes", () => {
+        // Equal bands were the single thing that most made a generated mandala
+        // look generated: a hand-drawn one is a stack of bands of different
+        // heights, and a ring of dots given a rosette's room is mostly air.
+        const r = mandala({ style: "mixed", layers: ["dots", "flower"], rings: 2, ringGap: 0, hub: 0.1 }),
+            a = bandsOf(r),
+            dots = a.filter(([lo]) => lo < r.width / 4),
+            flowers = a.filter(([lo]) => lo >= r.width / 4),
+            span = (b: [number, number][]) => Math.max(...b.map(o => o[1])) - Math.min(...b.map(o => o[0]));
+        expect(span(dots)).toBeLessThan(span(flowers));
+    });
+
+    it("still fills the whole radius, whatever the mixture", () => {
+        for (const layers of [["dots", "dots", "dots"], ["flower", "dots", "hatch"], ["fret", "spiral", "vine"]] as const) {
+            const r = mandala({ layers: [...layers], rings: 3, hub: 0.2, ringGap: 2, outline: false }),
+                R = r.width / 2,
+                far = Math.max(...bandsOf(r).map(o => o[1]));
+            // Within a whisker of the rim: the bands share out the space that
+            // is there rather than each taking a fixed slice of it.
+            expect(far, layers.join("+")).toBeGreaterThan(R * 0.93);
+            expect(far, layers.join("+")).toBeLessThanOrEqual(R + 0.01);
+        }
+    });
+});
+
+describe("the space between the elements", () => {
+    it("opens the motifs up sideways", () => {
+        expect(mandala({ gap: 0.6 }).web).toBeGreaterThan(mandala({ gap: 0.15 }).web);
+    });
+
+    it("opens them up along the radius too, which the sideways one cannot", () => {
+        // Two directions, two controls. A motif squeezed sideways but still
+        // touching the top and bottom of its band reads as cramped whatever
+        // the symmetry, and no value of `gap` reaches that.
+        const tall = mandala({ bandFill: 1, rings: 2, ringGap: 0, hub: 0.1, outline: false }),
+            short = mandala({ bandFill: 0.5, rings: 2, ringGap: 0, hub: 0.1, outline: false }),
+            reach = (r: ReturnType<typeof mandala>) => {
+                const a = bandsOf(r);
+                return Math.max(...a.map(o => o[1])) - Math.min(...a.map(o => o[0]));
+            };
+        expect(reach(short)).toBeLessThan(reach(tall));
+        // And it is reported, because on a cut mandala it is material.
+        expect(short.ringWeb).toBeGreaterThan(tall.ringWeb);
+    });
+
+    it("never lets the height control push a motif out of the disc", () => {
+        for (const bandFill of [0.3, 0.6, 1]) {
+            const r = mandala({ bandFill, style: "mixed", rings: 4, seed: 3 }),
+                R = r.width / 2;
+            expect(Math.max(...polar(r).map(p => p.r)), String(bandFill)).toBeLessThanOrEqual(R + 0.01);
+        }
+    });
+});
+
+describe("the stack", () => {
+    it("puts the motifs in the rings it was given, innermost first", () => {
+        const r = mandala({ layers: ["dots", "flower", "fret"], rings: 3 });
+        expect(r.aMotifKind).toEqual(["dots", "flower", "fret"]);
+    });
+
+    it("overrides the seed rather than being mixed with it", () => {
+        const a = mandala({ style: "mixed", seed: 11, layers: ["star", "star", "star"], rings: 3 }),
+            b = mandala({ style: "mixed", seed: 99, layers: ["star", "star", "star"], rings: 3 });
+        expect(a.aMotifKind).toEqual(b.aMotifKind);
+        expect(mandalaToSvg(a)).toBe(mandalaToSvg(b));
+    });
+
+    it("falls back to the seed for rings the stack does not reach", () => {
+        // Turning the ring count up must not blank the new rings.
+        const r = mandala({ style: "mixed", layers: ["dots", "flower"], rings: 5, seed: 2 });
+        expect(r.aMotifKind).toHaveLength(5);
+        expect(r.aMotifKind.slice(0, 2)).toEqual(["dots", "flower"]);
+        expect(r.aMotifKind.slice(2).every(Boolean)).toBe(true);
+    });
+
+    it("is ignored entirely when there is none", () => {
+        expect(mandala({ style: "petal", layers: null, rings: 3 }).aMotifKind).toEqual(["petal", "petal", "petal"]);
     });
 });

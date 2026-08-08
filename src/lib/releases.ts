@@ -30,6 +30,22 @@ export const REPO = "https://github.com/bbraeu/LaserKit";
 
 export const RELEASES: Release[] = [
     {
+        version: "3.16.0",
+        date: "2026-08-08",
+        title: "Build a mandala out of parts",
+        tools: ["mandala"],
+        notes: [
+            "Ten more motifs, taking it to twenty-five: squares, hexagons, eight-pointed stars, small circles, lattice, line focus, radiating axes, spirals, S-curves, and vines with leaves. Between them they cover what a printed “shapes to build a mandala from” sheet has on it.",
+            "Bands are now as tall as what is in them. The rings used to split the radius evenly, and that was the single thing that most made a generated mandala look generated — a hand-drawn one is a stack of bands of different heights, and a ring of dots given a rosette's room is mostly empty space while the rosettes are cramped by exactly the same measure. Each motif asks for the room it needs and the ring heights follow.",
+            "You can now set the motif for each ring by hand. It is the one control here that does not move the whole drawing, and it earns the exception: a mandala worth cutting is stacked — busy, quiet, busy, quiet — and nothing else expresses that. The rings arrive filled in from the seed rather than empty, and changing one freezes the rest so a later nudge of the symmetry cannot reshuffle them.",
+            "Two spacing controls instead of one, and they now sit together. Between motifs opens them up sideways within their ring; Motif height opens them up along the radius by leaving air at the top and bottom of every band. A motif squeezed sideways but still touching the edges of its band reads as cramped whatever the symmetry, and no value of the first reaches that.",
+            "The old Web slider is called Between motifs, and the between-rings slider has moved next to it. Naming the space between things after the material that is left is correct and is also why somebody asked for a control the tool already had.",
+            "The material reported between rings now counts the air the motifs leave at their own edges as well as the gap between the bands — otherwise it understated it by the whole of the height control.",
+            "New preset: Layered. Six bands, each a different motif, packed tight — the order that works rather than one the seed happened to find.",
+            "Fixed: a vine's top leaf hung a fifth of a band past the end of its stem, so on the outermost ring it poked out through the rim of the disc. No motif can leave its band now; it is enforced in one place rather than by being careful in twenty-five."
+        ]
+    },
+    {
         version: "3.15.0",
         date: "2026-08-08",
         title: "Calendar controls that do what they say",
