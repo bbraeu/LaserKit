@@ -1,0 +1,88 @@
+---
+import ToolPage from "../components/ToolPage.astro";
+import CalendarTool from "../tools/CalendarTool";
+---
+
+<ToolPage tool="calendar">
+    <Fragment slot="lead">
+        A whole year, or a single month, as a plaque to engrave. German or English, starting on Monday or Sunday, with
+        the leap years worked out <strong class="text-slate-300">properly</strong> — which is the only thing in this
+        tool that can be wrong, and the only thing that would not show.
+    </Fragment>
+
+    <CalendarTool client:only="react">
+        <div slot="fallback" class="flex h-[100dvh] flex-col bg-[#08090d]">
+            <div class="h-12 shrink-0 border-b border-white/7"></div>
+            <div class="flex min-h-0 flex-1">
+                <div class="hidden w-60 shrink-0 border-r border-white/7 xl:block"></div>
+                <div class="flex-1"></div>
+                <div class="hidden w-76 shrink-0 border-l border-white/7 xl:block"></div>
+            </div>
+            <div class="h-7 shrink-0 border-t border-white/7"></div>
+        </div>
+    </CalendarTool>
+
+    <section slot="notes" class="relative px-4 pb-24">
+        <div class="mx-auto w-[min(72rem,100%)]">
+            <div class="glass reveal rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">Either right or firewood</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    Every other tool here can be wrong in a way you can see: a joint too loose, a knob too small, a
+                    module you cannot scan. A calendar cannot. A plaque with the 29th of February 2027 engraved on it
+                    looks exactly like a correct one, right up until somebody reads it.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    So the leap year rule is written out rather than assumed: every four years,
+                    <em>except</em> every hundred, <em>except</em> every four hundred. 1900 had no 29th of February and
+                    2000 did. A generator that skips the exceptions is right for ninety-six years in every hundred,
+                    which is the worst possible rate for anybody catching it. The status bar says whether the year you
+                    picked is a leap year, and the tool asks you to check the dates against a calendar you trust
+                    before you cut.
+                </p>
+            </div>
+
+            <div class="mt-5 grid gap-5 lg:grid-cols-3">
+                <article class="glass reveal rounded-2xl p-6">
+                    <h2 class="text-lg font-semibold text-white">Monday or Sunday</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        A question with two right answers, so it is a switch rather than an assumption. Monday is the
+                        ISO week and what most of the world prints; Sunday is the North American convention. The day
+                        letters rotate with it, and so does the column the 1st falls in.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 110ms">
+                    <h2 class="text-lg font-semibold text-white">Every month the same height</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        A February that starts on a Sunday needs five rows and a March that starts on a Saturday needs
+                        six. Left to their natural heights, the months in a row would step up and down the page. Every
+                        block is padded to the same height and the same width, so the columns stay columns.
+                    </p>
+                </article>
+                <article class="glass reveal rounded-2xl p-6" style="--reveal-delay: 220ms">
+                    <h2 class="text-lg font-semibold text-white">Monospaced, or the columns wander</h2>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">
+                        In a proportional face a 1 is narrower than a 0, so the 1st and the 11th do not sit above each
+                        other and a week is no longer a row. Any monospaced font on your machine works; the system
+                        default is picked for you.
+                    </p>
+                </article>
+            </div>
+
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">A table of numbers is a string</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    This tool works out what the days are and nothing else. The lettering goes through the same
+                    machinery that sets a keychain — rendered in your chosen font and traced — and the board is a
+                    rectangle put round the result. It means a calendar gets every font on your machine, the same
+                    "cap height, not font size" sizing as everything else, and no second glyph pipeline to keep
+                    correct.
+                </p>
+            </div>
+
+            <p class="reveal mt-5 text-xs leading-relaxed text-slate-500">
+                A whole year at 4 mm cap height is roughly an A4 board. Below about 3 mm the digits start to close up
+                when engraved, so a smaller plaque wants a single month rather than smaller numbers.
+            </p>
+        </div>
+    </section>
+</ToolPage>

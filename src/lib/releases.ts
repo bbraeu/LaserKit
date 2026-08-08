@@ -30,6 +30,18 @@ export const REPO = "https://github.com/bbraeu/LaserKit";
 
 export const RELEASES: Release[] = [
     {
+        version: "3.12.0",
+        date: "2026-08-08",
+        title: "Calendars",
+        tools: ["calendar"],
+        notes: [
+            "New tool. A whole year or a single month as an engravable plaque, in German or English, starting on Monday or Sunday.",
+            "Leap years are worked out properly: every four, except every hundred, except every four hundred. 1900 had no 29th of February and 2000 did — and a generator that skips the exceptions is right for ninety-six years in a hundred, which is the worst possible rate for anybody catching it.",
+            "Every month block is padded to the same height and width, so the months in a row line up instead of stepping down the page as the short ones need fewer rows.",
+            "The status bar says whether the year is a leap year, and the tool asks you to check the dates against a calendar you trust — this is the one thing in the kit that is either right or firewood."
+        ]
+    },
+    {
         version: "3.11.0",
         date: "2026-08-08",
         title: "Word searches",

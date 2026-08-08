@@ -133,6 +133,19 @@ export const TOOLS: ToolDef[] = [
         description: "Free in-browser jigsaw puzzle generator for laser cutting: any board size and piece count, with a classic undercut knob so the pieces interlock, adjustable variation and knob size, a seed you can return to, and every joint cut exactly once. Exports SVG, DXF and Falcon Design Space (.fds)."
     },
     {
+        id: "calendar",
+        slug: "calendar/",
+        label: "Calendar",
+        short: "Calendar",
+        hint: "a year → a plaque to engrave",
+        blurb: "A whole year or a single month as an engravable plaque, in German or English, starting on Monday or Sunday — with the leap years worked out properly.",
+        // A page with a header row and a grid of days.
+        icon: "M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5",
+        accepts: "nothing — it starts from a year",
+        title: "Calendar generator for laser engraving — any year, any month | LaserKit",
+        description: "Free in-browser calendar generator for laser cutting and engraving: a whole year or a single month as a plaque, in German or English, with the week starting on Monday or Sunday and leap years worked out properly. Exports SVG, DXF and Falcon Design Space (.fds)."
+    },
+    {
         id: "wordsearch",
         slug: "wordsearch/",
         label: "Word search",
