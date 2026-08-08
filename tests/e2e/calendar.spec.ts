@@ -128,3 +128,49 @@ test.describe("the tray", () => {
         expect(dl.suggestedFilename()).toMatch(/_tray\.svg$/);
     });
 });
+
+test.describe("what the controls actually do", () => {
+    const paint = (page: Page) => page.getByTestId("stage-canvas").locator("svg");
+
+    test("engraves the frames on a board instead of cutting it into twelve", async ({ page }) => {
+        // A cut rectangle round every month on a single board is not a frame.
+        // It is twelve cards and a piece of scrap in the shape of a board.
+        await page.getByRole("switch", { name: "Frame each month" }).click();
+        await page.getByRole("switch", { name: "Cut the board" }).click();
+        await expect.poll(async () => (await paint(page).innerHTML()).includes("#00a000")).toBe(true);
+        expect(await paint(page).innerHTML()).not.toContain("#ff0000");
+        await expect(page.getByLabel("Colours in this drawing")).toContainText("engraved rule");
+    });
+
+    test("keeps the lettering off the edge of a card without asking for a frame", async ({ page }) => {
+        // The margin used to be tied to the frame toggle, so a card with no
+        // frame had the cut line straight through the last column of days.
+        await panel(page).getByRole("radio", { name: "Separate cards" }).click();
+        await expect(panel(page).getByRole("slider", { name: "Card margin" })).toBeVisible();
+        await expect(page.getByRole("switch", { name: "Rule inside each card" })).not.toBeChecked();
+
+        const size = async () => (await stat(page, "One month").innerText()).replace(/\D+/g, "");
+        const tight = await size();
+        await setNum(page, "Card margin", 14);
+        // With no frame in sight, the card still grows: the margin is the
+        // card's own, not the frame's.
+        await expect.poll(size).not.toBe(tight);
+    });
+
+    test("draws the rule inside the card rather than as a second cut", async ({ page }) => {
+        await panel(page).getByRole("radio", { name: "Separate cards" }).click();
+        await page.getByRole("switch", { name: "Rule inside each card" }).click();
+        await expect(panel(page).getByRole("slider", { name: "Rule inset" })).toBeVisible();
+        // The build is debounced, so the panel updates before the drawing does.
+        // One cut line per card, and the rule engraved inside it.
+        await expect.poll(async () => (await paint(page).innerHTML()).includes("#00a000")).toBe(true);
+        expect(await paint(page).innerHTML()).toContain("#ff0000");
+    });
+
+    test("warns when the cut line would run through the days", async ({ page }) => {
+        await panel(page).getByRole("radio", { name: "Separate cards" }).click();
+        await setNum(page, "Card margin", 0.5);
+        await page.getByTestId("statusbar").getByRole("button", { name: /notes?$/ }).hover();
+        await expect(page.getByRole("tooltip")).toContainText("brown edge");
+    });
+});

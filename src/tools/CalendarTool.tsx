@@ -38,6 +38,7 @@ import type { ExportItem, LegendItem } from "../workspace/types";
 
 const L = CALENDAR_LIMITS;
 const CUT = OPERATION_COLORS.VECTOR_CUTTING!;
+const MARK = OPERATION_COLORS.VECTOR_ENGRAVING!;
 
 /** One board with every month on it, or a card per month. */
 type Layout = "plaque" | "cards";
@@ -50,8 +51,10 @@ interface CalendarParams extends CalendarOptions {
     sheetGap: number;
     /** a frame round every month */
     sheetFrames: boolean;
-    /** clear space inside a frame, mm */
+    /** clear space between the lettering and the card edge or the frame, mm */
     frameMargin: number;
+    /** how far an engraved rule sits inside a card's cut edge, mm */
+    frameInset: number;
     frameRadius: number;
     /** the outer board, on a plaque */
     outline: boolean;
@@ -79,6 +82,7 @@ const DEFAULTS: CalendarParams = {
     sheetGap: 6,
     sheetFrames: false,
     frameMargin: 3,
+    frameInset: 2.5,
     frameRadius: 2,
     outline: true,
     radius: 4,
@@ -188,9 +192,14 @@ export default function CalendarTool() {
             ringWall: 0
         } satisfies TextOptions);
 
-        const aDesign = cal.aMonth.map(m => typeOf(monthText({ ...o, year: cal.year }, m))),
-            margin = o.sheetFrames ? o.frameMargin : 0,
-            // A card is its month plus the margin the frame leaves round it.
+        const cards = o.layout === "cards",
+            aDesign = cal.aMonth.map(m => typeOf(monthText({ ...o, year: cal.year }, m))),
+            // A card always has a margin, whether or not it also has a frame
+            // drawn on it: the cut line is the edge of the card, and lettering
+            // that runs to the edge of a card is lettering with nowhere for
+            // your fingers. On a board the margin only exists to sit inside a
+            // frame, so with no frame there is nothing for it to be.
+            margin = cards || o.sheetFrames ? o.frameMargin : 0,
             aCard = aDesign.map(d => ({ width: d.width + 2 * margin, height: d.height + 2 * margin }));
 
         const columns = o.month === null ? o.columns : 1,
@@ -200,7 +209,7 @@ export default function CalendarTool() {
             cardW = 0,
             cardH = 0;
 
-        if (o.layout === "cards") {
+        if (cards) {
             // Every card the same size, whatever its month needs, so a stack of
             // them is a stack rather than a fan.
             cardW = Math.max(...aCard.map(c => c.width));
@@ -211,11 +220,28 @@ export default function CalendarTool() {
             aDesign.forEach((d, i) => {
                 const q = pack.aPlaced[i]!;
                 aLayer.push(...moveLayers(d.aLayer, q.x + (cardW - d.width) / 2, q.y + (cardH - d.height) / 2));
+                // The edge of the card. This is the cut.
                 aLayer.push({
                     operation: CUT,
                     rings: [rectRing({ x0: q.x, y0: q.y, x1: q.x + cardW, y1: q.y + cardH }, o.frameRadius)],
                     filled: false
                 });
+                // And, if asked for, a rule drawn inside it. Engraved — a
+                // second cut line a couple of millimetres inside the first
+                // would simply cut the card into a card and a picture frame.
+                if (o.sheetFrames) {
+                    const k = Math.min(o.frameInset, cardW / 2 - 1, cardH / 2 - 1);
+                    if (k > 0) {
+                        aLayer.push({
+                            operation: MARK,
+                            rings: [rectRing(
+                                { x0: q.x + k, y0: q.y + k, x1: q.x + cardW - k, y1: q.y + cardH - k },
+                                Math.max(0, o.frameRadius - k)
+                            )],
+                            filled: false
+                        });
+                    }
+                }
             });
         } else {
             const grid = layoutSheets(aCard, columns, o.sheetGap),
@@ -236,7 +262,10 @@ export default function CalendarTool() {
                 if (o.sheetFrames) {
                     const cell = cellOf(aCard, columns, o.sheetGap, i);
                     aLayer.push({
-                        operation: CUT,
+                        // Engraved, not cut. A cut rectangle round every month
+                        // on a single board is not a frame — it is twelve cards
+                        // and a piece of scrap in the shape of a board.
+                        operation: MARK,
                         rings: [rectRing({
                             x0: pad + cell.x,
                             y0: pad + headH + cell.y,
@@ -264,8 +293,12 @@ export default function CalendarTool() {
             : null;
 
         const warnings = [...cal.warnings];
-        if (o.layout === "cards" && !o.sheetFrames) {
-            warnings.push("Cards are being cut with no frame, so the cut line runs close to the lettering. Turn the frames on, or raise the margin.");
+        if (cards && margin < 2) {
+            warnings.push(
+                `A ${mm(margin)} card margin puts the cut line almost on the lettering. The beam takes about a tenth `
+                + "of a millimetre and chars a little either side of that, so anything under two millimetres comes "
+                + "back with a brown edge through the last column of days."
+            );
         }
         if (o.holder && o.layout === "plaque") {
             warnings.push("A tray holds cards, and this is one board — switch to separate cards, or turn the tray off.");
@@ -286,7 +319,7 @@ export default function CalendarTool() {
         build,
         fitKey: [
             p.year, p.month, p.columns, p.capHeight, p.headings, p.outline, p.language,
-            p.radius, p.layout, p.sheetGap, p.sheetFrames, p.frameMargin, p.sheetWidth
+            p.radius, p.layout, p.sheetGap, p.sheetFrames, p.frameMargin, p.frameInset, p.sheetWidth
         ].join("|"),
         fallbackError: "This calendar could not be turned into geometry.",
         // Twelve renders and twelve traces: the most expensive build in the kit.
@@ -322,7 +355,8 @@ export default function CalendarTool() {
 
     const legend: LegendItem[] = [
         { color: "#1e6bff", label: "engraved" },
-        ...(p.outline || p.sheetFrames || p.layout === "cards" ? [{ color: "#ff0000", label: "cut" }] : [])
+        ...(p.sheetFrames ? [{ color: "#00a000", label: "engraved rule" }] : []),
+        ...(p.outline || p.layout === "cards" ? [{ color: "#ff0000", label: "cut" }] : [])
     ];
 
     return (
@@ -466,49 +500,91 @@ export default function CalendarTool() {
                     />
                 )}
                 <SliderField
-                    label="Between months"
-                    hint="Space between one month and the next, in millimetres — a real measurement rather than three space characters, which is what it used to be."
+                    label={p.layout === "cards" ? "Between cards" : "Between months"}
+                    hint={p.layout === "cards"
+                        ? "Space between one card and the next on the sheet. Not a design decision — it is how much room the head needs to get round the outside of a card without scorching its neighbour."
+                        : "Space between one month and the next, in millimetres — a real measurement rather than three space characters, which is what it used to be."}
                     value={p.sheetGap}
                     min={0}
                     max={40}
                     step={0.5}
                     onChange={n => params.set({ sheetGap: n }, { label: "Between months", coalesce: "sheetGap" })}
                 />
+                {/*
+                    On cards the margin is not optional and never has been: the
+                    cut line is the edge of the card, so without a margin the
+                    lettering runs off the edge. It used to be tied to the frame
+                    toggle, which meant a card with no frame had no margin
+                    either.
+                */}
+                {p.layout === "cards" && (
+                    <SliderField
+                        label="Card margin"
+                        hint="Clear space between the lettering and the edge of the card. This is what your fingers hold and what stops the cut line running through a Sunday."
+                        value={p.frameMargin}
+                        min={0}
+                        max={25}
+                        step={0.5}
+                        onChange={n => params.set({ frameMargin: n }, { label: "Card margin", coalesce: "frameMargin" })}
+                    />
+                )}
                 <ToggleField
-                    label="Frame each month"
-                    hint="A rectangle round every month. On separate cards it is the cut line; on one board it is engraved ruling that makes the table read as a table."
+                    label={p.layout === "cards" ? "Rule inside each card" : "Frame each month"}
+                    hint={p.layout === "cards"
+                        ? "An engraved rectangle drawn inside the card's edge. Engraved, not cut — a second cut line two millimetres in would turn every card into a card and a picture frame."
+                        : "An engraved rectangle round every month, which is what makes a board of twelve tables read as a table rather than as a wall of numbers. It is engraved: cut, it would separate the board into twelve pieces."}
                     checked={p.sheetFrames}
                     onChange={b => params.set({ sheetFrames: b }, { label: "Frames" })}
                 />
-                {(p.sheetFrames || p.layout === "cards") && (
-                    <>
-                        <SliderField
-                            label="Frame margin"
-                            hint="Clear space between the lettering and its frame. On a card this is what your fingers hold."
-                            value={p.frameMargin}
-                            min={0}
-                            max={25}
-                            step={0.5}
-                            onChange={n => params.set({ frameMargin: n }, { label: "Frame margin", coalesce: "frameMargin" })}
-                        />
-                        <SliderField
-                            label="Frame corners"
-                            value={p.frameRadius}
-                            min={0}
-                            max={15}
-                            step={0.5}
-                            onChange={n => params.set({ frameRadius: n }, { label: "Frame corners", coalesce: "frameRadius" })}
-                        />
-                    </>
+                {p.sheetFrames && p.layout === "cards" && (
+                    <SliderField
+                        label="Rule inset"
+                        hint="How far the engraved rule sits inside the cut edge."
+                        value={p.frameInset}
+                        min={0.5}
+                        max={12}
+                        step={0.5}
+                        onChange={n => params.set({ frameInset: n }, { label: "Rule inset", coalesce: "frameInset" })}
+                    />
                 )}
+                {p.sheetFrames && p.layout === "plaque" && (
+                    <SliderField
+                        label="Frame margin"
+                        hint="Clear space between a month and the rule drawn round it."
+                        value={p.frameMargin}
+                        min={0}
+                        max={25}
+                        step={0.5}
+                        onChange={n => params.set({ frameMargin: n }, { label: "Frame margin", coalesce: "frameMargin" })}
+                    />
+                )}
+                {(p.sheetFrames || p.layout === "cards") && (
+                    <SliderField
+                        label={p.layout === "cards" ? "Card corners" : "Frame corners"}
+                        hint={p.layout === "cards" ? "Rounded corners cut faster than square ones and survive a pocket." : undefined}
+                        value={p.frameRadius}
+                        min={0}
+                        max={15}
+                        step={0.5}
+                        onChange={n => params.set({ frameRadius: n }, { label: "Frame corners", coalesce: "frameRadius" })}
+                    />
+                )}
+                {/*
+                    Shown in both modes, because it works in both. It used to be
+                    hidden on cards while still being obeyed there, so whatever
+                    it had been left at on a board was what the cards came out
+                    with and there was no way to see it, let alone change it.
+                */}
+                <ToggleField
+                    label={p.layout === "cards" ? "Month names" : "Names and the year"}
+                    hint={p.layout === "cards"
+                        ? "The month's name above its table. Worth keeping: a card of numbers with no name on it is a puzzle."
+                        : "Month names above each table, and the year at the top."}
+                    checked={p.headings}
+                    onChange={b => params.set({ headings: b }, { label: "Headings" })}
+                />
                 {p.layout === "plaque" && (
                     <>
-                        <ToggleField
-                            label="Names and the year"
-                            hint="Month names above each table, and the year at the top."
-                            checked={p.headings}
-                            onChange={b => params.set({ headings: b }, { label: "Headings" })}
-                        />
                         <ToggleField
                             label="Cut the board"
                             hint="A rectangle round everything, with a margin that follows the letter height."

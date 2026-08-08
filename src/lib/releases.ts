@@ -30,6 +30,20 @@ export const REPO = "https://github.com/bbraeu/LaserKit";
 
 export const RELEASES: Release[] = [
     {
+        version: "3.15.0",
+        date: "2026-08-08",
+        title: "Calendar controls that do what they say",
+        tools: ["calendar"],
+        notes: [
+            "Fixed: a card had no margin unless you also turned the frame on. The cut line is the edge of a card, so without a margin it ran straight through the last column of days — and the margin slider was on screen the whole time, apparently doing nothing. A card always has its margin now, and it is called Card margin rather than Frame margin, because that is what it is.",
+            "Fixed: framing the months on a single board cut it into twelve. The rectangles were drawn as cuts, which is right on cards and turns a year board into twelve cards and a piece of scrap. They are engraved now, which is what the tooltip claimed all along.",
+            "On cards, Frame each month has become Rule inside each card: an engraved rectangle set in from the cut edge, with its own inset. A second cut line two millimetres inside the first would only ever produce a card and a picture frame.",
+            "The labels follow the mode now — Between cards, Card corners, Card margin on cards; Between months, Frame corners, Frame margin on a board — so nothing is named after the thing it does in the other layout.",
+            "The headings switch is on screen in both modes now. It was hidden on cards while still being obeyed there, so the cards came out with whatever it had been left at on a board and there was no way to see it, let alone change it.",
+            "The tool says something when the card margin is under two millimetres, which is where the char from the cut starts showing up in the numbers."
+        ]
+    },
+    {
         version: "3.14.0",
         date: "2026-08-08",
         title: "Mandala motifs that are built rather than sampled",
