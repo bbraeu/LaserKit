@@ -307,9 +307,9 @@ export default function MandalaTool() {
                 */}
                 <SliderField
                     label="Between motifs"
-                    hint="Space left round each motif inside its own ring, as a share of the slot it gets. Small values make a dense, lacy pattern; large ones make a sparse, strong one. On a cut mandala this is the control that decides whether the thing survives being picked up — the millimetres it works out to are in the status bar."
+                    hint="Space left round each motif inside its own ring, as a share of the slot it gets. Below zero the motifs are wider than their slots and lap over each other — and where they do, each ring is merged into a single outline, so two shapes that cross never become two crossing cut lines. Above zero it is the material between them, and on a cut mandala that is what decides whether the thing survives being picked up."
                     value={p.gap}
-                    min={0.05}
+                    min={-0.9}
                     max={0.8}
                     step={0.05}
                     unit=""

@@ -1,3 +1,4 @@
+import { regionOf, ringsOf, union } from "./boolean";
 import { arcSegments, circleRing, pathData, r3 } from "./design";
 import { OPERATION_COLORS, buildDxf } from "./dxf";
 import type { DxfEntity, Operation, Point } from "./dxf";
@@ -756,11 +757,22 @@ const BANDS: Motif[] = [
  * of concentric fences. One ring of dots between them breaks the rhythm, and
  * suddenly the whole thing looks composed.
  */
-const dotRing = (centre: Point, r0: number, r1: number, n: number, phase: number): Point[][] => {
+const dotRing = (
+    centre: Point,
+    r0: number,
+    r1: number,
+    n: number,
+    phase: number,
+    fat = 1
+): Point[][] => {
     const rMid = (r0 + r1) / 2,
         // Big enough to read, small enough that they never touch: half the band
-        // or half the gap between two of them, whichever is less.
-        rDot = Math.min((r1 - r0) / 2, (Math.PI * rMid) / n * 0.62);
+        // or half the gap between two of them, whichever is less — and then
+        // `fat`, which is the spacing control. Without it the dot ring would be
+        // the one motif in the set that ignored the slider, and a negative
+        // spacing that runs every other ring into a continuous band would leave
+        // the dots sitting there in polite isolation.
+        rDot = Math.min((r1 - r0) / 2, (Math.PI * rMid) / n * 0.62) * Math.max(0.1, fat);
     return Array.from({ length: n }, (_, k) => {
         const a = phase + (2 * Math.PI * k) / n;
         return circleRing(centre.x + rMid * Math.cos(a), centre.y + rMid * Math.sin(a), Math.max(0.2, rDot));
@@ -797,7 +809,12 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
         R = size / 2,
         n = Math.round(clamp(opt.symmetry, L.minSymmetry, L.maxSymmetry)),
         rings = Math.round(clamp(opt.rings, L.minRings, L.maxRings)),
-        gap = clamp(opt.gap, 0.05, 0.8),
+        // Negative is allowed, and it is the interesting half of the range.
+        // Below zero a motif is wider than its own slot, so it laps over the
+        // one beside it — see the merge below, which is what stops that being
+        // two crossing cut lines.
+        gap = clamp(opt.gap, -0.9, 0.8),
+        bLap = gap < 0,
         ringGap = clamp(opt.ringGap, 0, R / 2),
         hub = clamp(opt.hub, 0, 0.8) * R,
         hole = clamp(opt.hole, 0, R),
@@ -867,9 +884,32 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
     // Nesting is an engraved idea: a smaller hole inside a hole is a ring of
     // material that falls out on its own.
     const bNested = opt.nested && opt.mode !== "cut",
-        aMotif: Point[][] = [];
+        aMotif: Point[][] = [],
+        // The echoes are kept apart from the motifs they sit inside. Merging
+        // them in would swallow them whole — an echo is entirely within its
+        // parent, so a union of the two is the parent — and the echo is the
+        // one thing that turns a shape into a motif.
+        aEcho: Point[][] = [];
     let web = Infinity,
         nMotif = 0;
+
+    /**
+     * One ring's motifs, merged into as few outlines as they overlap into.
+     *
+     * Only when the spacing is negative, and that is not an optimisation. At
+     * zero or above the motifs do not touch, so a merge would be a few hundred
+     * polygons of work to return exactly what it was given — and it would round
+     * every coordinate through the boolean library on a tool whose output has
+     * been stable across releases.
+     *
+     * Below zero it is the whole point. Two outlines that cross are, to a
+     * laser, four cuts and two loose pieces: the head runs round motif A,
+     * through motif B, back out again, and the little lens where they crossed
+     * drops out on its own. Merged, the pair is one closed contour and the
+     * crossing never existed.
+     */
+    const mergeRing = (a: Point[][]): Point[][] =>
+        bLap && a.length > 1 ? ringsOf(union(a.map(regionOf))) : a;
 
     for (const [i, band0] of aRing.entries()) {
         const motif = aMotifKind[i]!,
@@ -882,9 +922,12 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
         const phase = (i % 2) * (Math.PI / n);
 
         if (motif === "dots") {
-            aMotif.push(...dotRing(centre, r.r0, r.r1, n, phase));
+            // Dots grow with the spacing like everything else, so a negative
+            // setting runs them into each other as a bead chain rather than
+            // leaving the one ring in the set that ignores the slider.
+            aMotif.push(...mergeRing(dotRing(centre, r.r0, r.r1, n, phase, 1 - gap)));
             nMotif += n;
-            web = Math.min(web, ((2 * Math.PI * ((r.r0 + r.r1) / 2)) / n) * 0.24);
+            web = Math.min(web, ((2 * Math.PI * ((r.r0 + r.r1) / 2)) / n) * 0.24 * (1 - gap));
             continue;
         }
 
@@ -909,15 +952,17 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
                 web = Math.min(web, 2 * ((Math.PI / n) * rq - q.x * squash * h));
             }
 
+            const aHere: Point[][] = [];
             for (let k = 0; k < n; k++) {
                 const a = phase + (2 * Math.PI * k) / n;
-                for (const ring of shape.rings) aMotif.push(placeUV(ring, centre, r.r0, h, a, squash));
+                for (const ring of shape.rings) aHere.push(placeUV(ring, centre, r.r0, h, a, squash));
                 if (bNested && shape.echo) {
                     for (const ring of shape.rings) {
-                        aMotif.push(placeUV(shrinkUV(ring, 0.5, shape.midX, shape.midY), centre, r.r0, h, a, squash));
+                        aEcho.push(placeUV(shrinkUV(ring, 0.5, shape.midX, shape.midY), centre, r.r0, h, a, squash));
                     }
                 }
             }
+            aMotif.push(...mergeRing(aHere));
             nMotif += n;
             continue;
         }
@@ -937,16 +982,18 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
             here = 2 * ((Math.PI / n) - halfMax * profile(tFat)) * rFat;
         web = Math.min(web, here);
 
+        const aHere: Point[][] = [];
         for (let k = 0; k < n; k++) {
             const a = phase + (2 * Math.PI * k) / n;
-            aMotif.push(motifRing(centre, r.r0, r.r1, a, halfMax, profile));
+            aHere.push(motifRing(centre, r.r0, r.r1, a, halfMax, profile));
             // The echo. Inset radially as well as narrowed, or it would touch
             // its parent at both ends.
             if (bNested) {
                 const inset = (r.r1 - r.r0) * 0.22;
-                aMotif.push(motifRing(centre, r.r0 + inset, r.r1 - inset, a, halfMax * 0.52, profile));
+                aEcho.push(motifRing(centre, r.r0 + inset, r.r1 - inset, a, halfMax * 0.52, profile));
             }
         }
+        aMotif.push(...mergeRing(aHere));
         nMotif += n;
     }
 
@@ -974,7 +1021,14 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
     if (band <= 0) {
         warnings.push("The hub and the gaps between the rings take up the whole disc — there is no room left for a pattern.");
     }
-    if (opt.mode === "cut") {
+    if (bLap) {
+        warnings.push(
+            "The motifs on each ring overlap and have been merged into one outline per ring, so there are no "
+            + "crossing cut lines. What holds a cut one together is now the material between the rings — the "
+            + "figure between motifs no longer applies, because there is none."
+        );
+    }
+    if (opt.mode === "cut" && !bLap) {
         if (web < 1) {
             warnings.push(
                 `Only ${mm(web)} of material is left between one motif and the next. Cut, this comes off the bed in `
@@ -983,6 +1037,8 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
         } else if (web < 2) {
             warnings.push(`${mm(web)} between motifs is fragile in anything but plywood. Handle the piece by its rim.`);
         }
+    }
+    if (opt.mode === "cut") {
         if (ringGap < 1 && rings > 1) {
             warnings.push(
                 `The rings are ${mm(ringGap)} apart, which is what holds one ring to the next. Under a millimetre `
@@ -1003,7 +1059,7 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
     // are engraved.
     const aLayer: MandalaLayer[] = opt.mode === "cut"
         ? [
-            { operation: CUT, rings: [...outline, ...aMotif, ...aHole], filled: false },
+            { operation: CUT, rings: [...outline, ...aMotif, ...aEcho, ...aHole], filled: false },
             ...(aRule.length ? [{ operation: MARK, rings: aRule, filled: false }] : [])
         ]
         : [
@@ -1011,8 +1067,8 @@ export const buildMandala = (opt: MandalaOptions): MandalaResult => {
                 ? [{ operation: CUT, rings: [...outline, ...aHole], filled: false }]
                 : []),
             opt.outlined
-                ? { operation: MARK, rings: [...aMotif, ...aRule], filled: false }
-                : { operation: FILL, rings: aMotif, filled: true },
+                ? { operation: MARK, rings: [...aMotif, ...aEcho, ...aRule], filled: false }
+                : { operation: FILL, rings: [...aMotif, ...aEcho], filled: true },
             ...(!opt.outlined && aRule.length ? [{ operation: MARK, rings: aRule, filled: false }] : [])
         ];
 

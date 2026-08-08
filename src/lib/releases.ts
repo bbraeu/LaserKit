@@ -30,6 +30,19 @@ export const REPO = "https://github.com/bbraeu/LaserKit";
 
 export const RELEASES: Release[] = [
     {
+        version: "3.19.0",
+        date: "2026-08-08",
+        title: "Motifs that overlap, and the booleans that make it safe",
+        tools: ["mandala"],
+        notes: [
+            "The spacing between motifs goes below zero. Under it a motif is wider than its own slot and laps over the one beside it, which is where the woven look comes from.",
+            "Where they lap, each ring is merged into a single outline. That is not a nicety: two outlines that cross are, to a laser, four cuts and two loose pieces — the head runs round motif A, through motif B, back out again, and the little lens where they crossed drops out on its own. A test now checks the finished drawing pair by pair for real segment crossings and requires none.",
+            "The dots follow the slider too, so a negative setting runs them into a bead chain rather than leaving them the one ring in the set that ignores it.",
+            "Nothing changes at zero or above. A merge there would be a few hundred polygons of work to hand back exactly what it was given, and would round every coordinate through the boolean library on a tool whose output has been stable across releases.",
+            "Underneath: real polygon booleans (union, difference, intersection, exclusion, with holes) and a shape library of nineteen stamps in three families — several of which are *built* from the booleans rather than plotted, so a concentric ring is exactly concentric and a vesica piscis is genuinely the overlap of two circles."
+        ]
+    },
+    {
         version: "3.18.0",
         date: "2026-08-08",
         title: "The calendar panel, reorganised",

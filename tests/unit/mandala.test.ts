@@ -383,3 +383,103 @@ describe("the stack", () => {
         expect(mandala({ style: "petal", layers: null, rings: 3 }).aMotifKind).toEqual(["petal", "petal", "petal"]);
     });
 });
+
+// ---------------------------------------------------------------------------
+// Motifs that overlap each other.
+//
+// The spacing slider goes below zero, and below zero a motif is wider than its
+// own slot and laps over the one beside it. That is a drawing decision and a
+// *cutting* decision at the same time: two outlines that cross are, to a laser,
+// four cuts and two loose pieces — the head runs round motif A, through motif
+// B, back out, and the little lens where they crossed drops out on its own.
+// So the overlapping ones are merged into a single outline per ring, and what
+// is pinned here is that the merge really happens.
+// ---------------------------------------------------------------------------
+
+/** Every ring of geometry the drawing would cut or burn. */
+const drawn = (r: ReturnType<typeof mandala>): { x: number; y: number }[][] =>
+    r.aLayer.flatMap(l => l.rings);
+
+/** Do any two of these outlines cross? The thing a laser cannot survive. */
+const anyCrossing = (aRing: { x: number; y: number }[][]): boolean => {
+    const side = (a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }) =>
+        Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
+    const crosses = (p1: { x: number; y: number }, p2: { x: number; y: number },
+        q1: { x: number; y: number }, q2: { x: number; y: number }) =>
+        side(p1, p2, q1) * side(p1, p2, q2) < 0 && side(q1, q2, p1) * side(q1, q2, p2) < 0;
+    for (let i = 0; i < aRing.length; i++) {
+        for (let j = i + 1; j < aRing.length; j++) {
+            const A = aRing[i]!, B = aRing[j]!;
+            for (let a = 0; a < A.length; a++) {
+                for (let b = 0; b < B.length; b++) {
+                    if (crosses(A[a]!, A[(a + 1) % A.length]!, B[b]!, B[(b + 1) % B.length]!)) return true;
+                }
+            }
+        }
+    }
+    return false;
+};
+
+describe("motifs that lap over each other", () => {
+    it("takes a spacing below zero", () => {
+        const r = mandala({ gap: -0.5, rings: 1, symmetry: 10, nested: false });
+        expect(r.motifs).toBe(10);
+        expect(drawn(r).length).toBeGreaterThan(0);
+    });
+
+    it("merges them into one outline per ring instead of leaving them crossing", () => {
+        // The whole point. Ten petals each half again as wide as its slot are
+        // one closed contour, not ten overlapping ones.
+        const lapped = mandala({ gap: -0.5, rings: 1, symmetry: 10, nested: false, outline: false, ringLines: false }),
+            apart = mandala({ gap: 0.4, rings: 1, symmetry: 10, nested: false, outline: false, ringLines: false });
+        expect(drawn(apart)).toHaveLength(10);
+        expect(drawn(lapped).length).toBeLessThan(10);
+    });
+
+    it("leaves no crossing cut lines behind", () => {
+        // Measured rather than assumed: every pair of outlines is tested for a
+        // real segment crossing. This is the failure the merge exists to
+        // prevent and it is invisible on the canvas.
+        const r = mandala({
+            gap: -0.6, rings: 1, symmetry: 9, nested: false, outline: false, ringLines: false, mode: "cut"
+        });
+        expect(anyCrossing(drawn(r))).toBe(false);
+    });
+
+    it("does not touch the drawing when the spacing is not negative", () => {
+        // A merge at zero or above would be a few hundred polygons of work to
+        // return what it was given, and would round every coordinate through
+        // the boolean library on a tool whose output has been stable across
+        // releases.
+        const a = mandalaToSvg(mandala({ gap: 0.35 })),
+            b = mandalaToSvg(mandala({ gap: 0.35 }));
+        expect(a).toBe(b);
+        expect(drawn(mandala({ gap: 0, rings: 1, symmetry: 8, nested: false, outline: false, ringLines: false })))
+            .toHaveLength(8);
+    });
+
+    it("keeps the echo, which a careless merge would swallow whole", () => {
+        // An echo sits entirely inside its parent, so a union of the two *is*
+        // the parent. It has to be held back from the merge or the one thing
+        // that turns a shape into a motif quietly disappears.
+        const plain = mandala({ gap: -0.5, rings: 1, symmetry: 8, nested: false, outline: false, ringLines: false }),
+            echoed = mandala({ gap: -0.5, rings: 1, symmetry: 8, nested: true, outline: false, ringLines: false });
+        expect(drawn(echoed).length).toBe(drawn(plain).length + 8);
+    });
+
+    it("runs the dots into a chain rather than leaving them the one ring that ignores the slider", () => {
+        const tight = mandala({ style: "dots", gap: -0.6, rings: 1, symmetry: 12, outline: false, ringLines: false }),
+            loose = mandala({ style: "dots", gap: 0.4, rings: 1, symmetry: 12, outline: false, ringLines: false });
+        expect(drawn(loose)).toHaveLength(12);
+        expect(drawn(tight).length).toBeLessThan(12);
+    });
+
+    it("says what overlapping means for a cut one", () => {
+        // The web is no longer what holds a ring together — there is none — so
+        // the warning that talks about it would be answering a question nobody
+        // asked, and the one that matters is about the rings.
+        const r = mandala({ gap: -0.4, mode: "cut", symmetry: 24 });
+        expect(r.warnings.some(s => /merged into one outline per ring/.test(s))).toBe(true);
+        expect(r.warnings.some(s => /off the bed in/.test(s))).toBe(false);
+    });
+});
