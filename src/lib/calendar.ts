@@ -19,6 +19,8 @@
 // the worst possible failure rate for noticing.
 // ---------------------------------------------------------------------------
 
+import type { BoxOptions } from "./box";
+
 export const CALENDAR_LIMITS = {
     minYear: 1900,
     maxYear: 2999,
@@ -44,11 +46,11 @@ export interface CalendarOptions {
 }
 
 export interface CalendarResult {
-    /** the whole thing as monospaced text */
-    text: string;
-    /** how many months it covers */
-    months: number;
-    /** whether the year is a leap year */
+    /** the months it covers, 0-indexed */
+    aMonth: number[];
+    /** the year, once it has been clamped to something real */
+    year: number;
+    /** whether that year is a leap year */
     leap: boolean;
     warnings: string[];
 }
@@ -132,6 +134,15 @@ export const monthLines = (opt: CalendarOptions, month: number): string[] => {
     return out;
 };
 
+/**
+ * Which months, and everything true about the year.
+ *
+ * This used to compose the whole calendar as one string, with the months held
+ * apart by padding every block with spaces. That works exactly as long as the
+ * font is monospaced — and the tool has a font picker, so it was one click from
+ * months walking into each other. Space padding is not a layout. The months are
+ * set one at a time now and placed in millimetres by `layoutSheets`.
+ */
 export const buildCalendar = (opt: CalendarOptions): CalendarResult => {
     const L = CALENDAR_LIMITS,
         warnings: string[] = [],
@@ -140,24 +151,6 @@ export const buildCalendar = (opt: CalendarOptions): CalendarResult => {
         aMonth = opt.month === null
             ? Array.from({ length: 12 }, (_, i) => i)
             : [Math.round(clamp(opt.month, 0, 11))];
-
-    // Months laid out in rows of `columns`, each block padded to the same width
-    // so the columns stay columns.
-    const block = aMonth.map(m => monthLines({ ...opt, year }, m)),
-        width = Math.max(...block.flat().map(s => s.length)),
-        aRow: string[] = [];
-
-    for (let i = 0; i < block.length; i += columns) {
-        const row = block.slice(i, i + columns),
-            tall = Math.max(...row.map(b => b.length));
-        for (let line = 0; line < tall; line++) {
-            aRow.push(row.map(b => (b[line] ?? "").padEnd(width, " ")).join("   ").trimEnd());
-        }
-        if (i + columns < block.length) aRow.push("");
-    }
-
-    const head = opt.headings && opt.month === null ? [String(year), ""] : [],
-        text = [...head, ...aRow].join("\n").replace(/\n{3,}/g, "\n\n");
 
     // ── sanity ──────────────────────────────────────────────────────────
     if (opt.month === null && columns > 4) {
@@ -175,5 +168,135 @@ export const buildCalendar = (opt: CalendarOptions): CalendarResult => {
         + "thing here that is either right or firewood."
     );
 
-    return { text, months: aMonth.length, leap: isLeap(year), warnings };
+    return { aMonth, year, leap: isLeap(year), warnings };
 };
+
+// ---------------------------------------------------------------------------
+// Laying the months out
+//
+// The first version of this padded every month block with spaces so the columns
+// lined up, and then set the whole calendar as one piece of text. That works
+// only for as long as the font is monospaced — and the tool offers a font
+// picker, so it was one click away from months walking into each other. Space
+// padding is not a layout.
+//
+// Each month is its own block of text now, set on its own and *placed in
+// millimetres*. Nothing about the font can make two months collide, the gap
+// between them is a real measurement rather than three space characters, and
+// there is somewhere to put a frame.
+// ---------------------------------------------------------------------------
+
+/** One month as its own block of text, with no padding for its neighbours. */
+export const monthText = (opt: CalendarOptions, month: number): string =>
+    monthLines(opt, month).join("\n").replace(/\n+$/, "");
+
+/** Anything with a size, which for the layout is all a month is. */
+export interface Sized {
+    width: number;
+    height: number;
+}
+
+export interface Placed extends Sized {
+    x: number;
+    y: number;
+}
+
+/**
+ * Months on a grid, every cell the size of the largest.
+ *
+ * A uniform cell rather than a packed one: a calendar is a table, and a table
+ * whose columns are as wide as their widest entry is a table, while one whose
+ * columns each shrink to fit is a mess. February being a line shorter than
+ * March must not move March.
+ */
+export const layoutSheets = (
+    aSheet: Sized[],
+    columns: number,
+    gap: number
+): { aPlaced: Placed[]; width: number; height: number } => {
+    if (!aSheet.length) return { aPlaced: [], width: 0, height: 0 };
+    const cols = Math.max(1, Math.round(columns)),
+        cellW = Math.max(...aSheet.map(o => o.width)),
+        cellH = Math.max(...aSheet.map(o => o.height)),
+        rows = Math.ceil(aSheet.length / cols);
+
+    const aPlaced = aSheet.map((o, i) => ({
+        // Centred in its cell, so a short month sits under the middle of the
+        // column rather than hard against its left edge.
+        x: (i % cols) * (cellW + gap) + (cellW - o.width) / 2,
+        y: Math.floor(i / cols) * (cellH + gap) + (cellH - o.height) / 2,
+        width: o.width,
+        height: o.height
+    }));
+
+    return {
+        aPlaced,
+        width: cols * cellW + (cols - 1) * gap,
+        height: rows * cellH + (rows - 1) * gap
+    };
+};
+
+/** The cell a sheet sits in, which is what a frame is drawn round. */
+export const cellOf = (aSheet: Sized[], columns: number, gap: number, i: number): Placed => {
+    const cols = Math.max(1, Math.round(columns)),
+        cellW = Math.max(...aSheet.map(o => o.width)),
+        cellH = Math.max(...aSheet.map(o => o.height));
+    return {
+        x: (i % cols) * (cellW + gap),
+        y: Math.floor(i / cols) * (cellH + gap),
+        width: cellW,
+        height: cellH
+    };
+};
+
+// ---------------------------------------------------------------------------
+// Somewhere to keep them
+//
+// Twelve loose cards are twelve things to lose, so the tool offers a tray to
+// stand them in. It is not a second box generator: it is *the* box generator,
+// called with the numbers the cards imply. A tray for calendar cards and a
+// parts sorter are the same object, and the finger joints, the kerf
+// compensation and the nesting are already right there and already tested.
+// ---------------------------------------------------------------------------
+
+/** What a tray for this many cards of this size has to be. */
+export const holderOptions = (
+    cardW: number,
+    cardH: number,
+    count: number,
+    thickness: number,
+    kerf: number
+): BoxOptions => ({
+    // Measured inside: what has to fit is the cards, not the tray.
+    dims: "inner",
+    // As wide as a card and a little, so one can be lifted out without
+    // scraping down both walls.
+    width: cardW + 1.5,
+    // As deep as the stack, plus a finger's room behind it.
+    depth: Math.max(12, count * (thickness + 0.4) + 6),
+    // Half a card tall, so the month you want is readable without taking it
+    // out — which is the whole point of standing them up.
+    height: Math.max(15, cardH * 0.55),
+    thickness,
+    kerf,
+    clearance: 0,
+    finger: 0,
+    lid: "none",
+    cornerRadius: 0,
+    cornerPattern: "tee",
+    cornerPitch: 3,
+    cornerLink: 6,
+    panelJoint: "edge",
+    panelOffset: 6,
+    lidClearance: 0.1,
+    lidLip: false,
+    lidHeight: 25,
+    pin: 3,
+    hingeOffset: 3,
+    dividersW: 0,
+    dividersD: 0,
+    dividerHeight: 0,
+    sheetWidth: 400,
+    gap: 4,
+    labels: false
+});

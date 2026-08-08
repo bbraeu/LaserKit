@@ -30,6 +30,19 @@ export const REPO = "https://github.com/bbraeu/LaserKit";
 
 export const RELEASES: Release[] = [
     {
+        version: "3.13.0",
+        date: "2026-08-08",
+        title: "Calendar cards, frames, and a tray to keep them in",
+        tools: ["calendar", "box"],
+        notes: [
+            "Fixed: the months overlapped. They were held apart by padding each block with spaces, which works exactly as long as the font is monospaced — and the tool has a font picker, so it was one click away from March landing on top of February. Space padding is not a layout. Every month is set on its own now and placed in millimetres, and every cell is the size of the largest, so February being a line shorter cannot move March.",
+            "A frame round every month, with a margin you set. On one board it is engraved ruling that makes the table read as a table; on cards it is the cut line.",
+            "New: cut the months as twelve separate cards instead of one board. They come out the same size whatever each month needs, so a stack of them is a stack rather than a fan, and they are nested onto a sheet no wider than your bed.",
+            "New: a tray to stand the cards in, switched on next to the card option and shown in a panel under the canvas the way the stamp shows its mount. It is the box generator called with the numbers the cards imply — same finger joints, same kerf compensation, same nesting — and it comes out half a card tall so the month you want is readable without taking it out.",
+            "The space between months is a real measurement now, in millimetres, rather than three space characters."
+        ]
+    },
+    {
         version: "3.12.0",
         date: "2026-08-08",
         title: "Calendars",

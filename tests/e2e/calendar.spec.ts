@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import { exportAs, exportDefault, openTool, stat, waitForDrawing } from "./helpers";
+import { exportAs, exportDefault, exportExtra, openTool, stat, waitForDrawing } from "./helpers";
 
 // The calendar in a real browser. The dates are pinned in
 // tests/unit/calendar.test.ts against days everybody knows; what is checked
@@ -67,4 +67,64 @@ test("writes the calendar named after the year", async ({ page }) => {
         const dl = await exportAs(page, new RegExp(`^${label}`));
         expect(dl.suggestedFilename()).toBe(`calendar_2030.${ext}`);
     }
+});
+
+test.describe("layout", () => {
+    test("frames every month, with a margin you can set", async ({ page }) => {
+        const size = async () => (await stat(page, "Size").innerText()).replace(/^Size\s*/, "");
+        await page.getByRole("switch", { name: "Frame each month" }).click();
+        await expect(panel(page).getByRole("slider", { name: "Frame margin" })).toBeVisible();
+        const tight = await size();
+        await setNum(page, "Frame margin", 12);
+        // A bigger margin makes every cell bigger, so the whole board grows.
+        await expect.poll(size).not.toBe(tight);
+    });
+
+    test("keeps the months apart in millimetres, whatever the font", async ({ page }) => {
+        // The bug this replaces: months held apart by space padding, which came
+        // undone the moment a proportional face was picked. Now the gap is a
+        // measurement, so switching the font changes how a month looks and
+        // never where it sits relative to the next one.
+        const cells = async () => (await stat(page, "One month").innerText()).replace(/^One month\s*/, "");
+        await setNum(page, "Between months", 20);
+        const wide = await cells();
+        await panel(page).getByRole("combobox", { name: "Font" }).click();
+        await page.getByRole("option", { name: "Sans (system)", exact: true }).click();
+        // The month's own size changes with the face; the layout still works.
+        await expect.poll(cells).not.toBe("");
+        await expect(page.getByTestId("stage-canvas").locator("svg")).toBeVisible();
+        expect(wide).not.toBe("");
+    });
+
+    test("cuts the months as separate cards", async ({ page }) => {
+        await panel(page).getByRole("radio", { name: "Separate cards" }).click();
+        // Nested on a sheet rather than laid on a board, so the months-across
+        // control has nothing to do.
+        await expect(panel(page).getByRole("slider", { name: "Months across" })).toHaveCount(0);
+        await expect(panel(page).getByRole("slider", { name: "Sheet width" })).toBeVisible();
+        await expect(stat(page, "Months")).toContainText("12");
+    });
+});
+
+test.describe("the tray", () => {
+    test("is offered only for cards, and says why", async ({ page }) => {
+        await panel(page).getByRole("button", { name: "Tray", exact: true }).click();
+        await expect(page.getByRole("switch", { name: "Cut a tray for the cards" })).toBeDisabled();
+        await expect(panel(page)).toContainText("A tray holds cards");
+    });
+
+    test("appears in a panel under the canvas and in the export menu", async ({ page }) => {
+        await panel(page).getByRole("radio", { name: "Separate cards" }).click();
+        await panel(page).getByRole("button", { name: "Tray", exact: true }).click();
+        await page.getByRole("switch", { name: "Cut a tray for the cards" }).click();
+
+        // The parts sheet, the way the stamp tool shows its handle.
+        await expect(page.getByTestId("tray-preview")).toBeVisible();
+        await expect(page.getByTestId("bottom-panel")).toContainText("finger-jointed tray");
+
+        // A companion file, so it is a button of its own in the toolbar rather
+        // than a line in the dropdown — nobody cuts the cards without the tray.
+        const dl = await exportExtra(page, "holder");
+        expect(dl.suggestedFilename()).toMatch(/_tray\.svg$/);
+    });
 });
