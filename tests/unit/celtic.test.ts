@@ -1,36 +1,58 @@
 import { describe, expect, it } from "vitest";
-import { CELTIC_LIMITS, buildCelticTree, leafRing } from "../../src/lib/celtic";
-import type { CelticOptions, CelticResult } from "../../src/lib/celtic";
+import { regionOf, signedArea, union } from "../../src/lib/boolean";
+import type { Region } from "../../src/lib/boolean";
+import {
+    CELTIC_LIMITS,
+    buildCelticTree,
+    celticSheet,
+    celticToSvg,
+    leafRing
+} from "../../src/lib/celtic";
+import type { CelticOptions, CelticResult, Leaf } from "../../src/lib/celtic";
+import type { Point } from "../../src/lib/dxf";
 
 // ---------------------------------------------------------------------------
-// The tree of life is decoration, and most of what it looks like is taste. Two
-// things are not.
+// The tree of life is decoration, and most of what it looks like is taste. Four
+// things are not, and all four of them fail *silently* — the canvas shows a
+// perfectly good tree in a ring in every one of these cases, and the bed shows
+// something else.
 //
-// The first is that the whole design is *centrelines with widths*, painted and
-// traced into one silhouette by the tool. That only works while the centrelines
-// are where they claim to be: a branch that wanders out through the rim comes
-// back from the tracer as a lump on the outside of the disc, and a tab that
-// stops short of the bottom of the circle comes back as a tab that never
-// reaches its slot. Neither is visible on the canvas — both are visible on the
-// bed. So containment is what most of this file is about.
+//   1. Nothing may leave the outer circle. There is no clip in the builder any
+//      more, deliberately: containment is a property of how the geometry is
+//      constructed, and this file is what says so. A twig or a strand out past
+//      the rim is a bulge on the edge of a disc that is supposed to be round.
 //
-// The second is the leaf floor. Every laser tool that draws leaves gets asked
-// for smaller ones, and under about 4 mm a cut leaf is a hole the size of the
-// beam plus its own char. The floor is enforced rather than suggested, and the
-// test is that it stays that way.
+//   2. The whole drawing has to come back from the union as ONE region. Two
+//      regions means something is a separate piece of material, and what falls
+//      out of the frame on the bed is the tree.
+//
+//   3. Every inner cutout has to be a *hole in* a region rather than an outline
+//      of its own. A hole is a subpath under the even-odd rule; a separate
+//      outline is a separate cut, and the difference does not show until
+//      something fills the file or a nesting tool reads it.
+//
+//   4. The leaf floor is 4 mm and it is enforced rather than suggested. Under
+//      it a cut leaf is a hole the size of the beam plus its own char.
+//
+// The rest of the file is about the two rules that are new: leaves are spread
+// out rather than clumped, and a leaf that would be swallowed by what is
+// already drawn is engraved instead of cut.
 // ---------------------------------------------------------------------------
 
 const BASE: CelticOptions = {
     size: 150,
-    branches: 3,
+    ringWidth: 12,
+    knotDensity: 12,
+    braidGap: 1.2,
+    trunk: 10,
+    sway: 0.5,
+    branch: 7,
     depth: 4,
-    twist: 0.5,
-    trunk: 9,
+    density: 5,
+    variance: 0.5,
     leaves: true,
     leafSize: 7,
-    roots: true,
-    border: "braid",
-    borderWidth: 10,
+    leafCount: 48,
     base: true,
     thickness: 3,
     kerf: 0.15,
@@ -39,86 +61,95 @@ const BASE: CelticOptions = {
 
 const tree = (patch: Partial<CelticOptions> = {}): CelticResult => buildCelticTree({ ...BASE, ...patch });
 
-const centreOf = (r: CelticResult) => ({ x: r.size / 2, y: r.size / 2 });
+const centreOf = (r: CelticResult): Point => ({ x: r.size / 2, y: r.size / 2 });
 
-/**
- * How far out the branches are allowed to grow, re-derived rather than
- * exported: with a ring they grow *into* it and stop 55 % of the way across the
- * band, and without one they stop just short of the edge.
- */
-const reachOf = (r: CelticResult): number =>
-    r.ring ? r.ring.inner + (r.ring.outer - r.ring.inner) * 0.55 : (r.size / 2) * 0.94;
+/** Every point of every cut contour, which is what actually gets burnt. */
+const cutPoints = (r: CelticResult): Point[] => r.aCut.flatMap(o => o.rings.flat());
 
-/** Every centreline point, as a distance from the middle of the disc. */
-const strokeRadii = (r: CelticResult): number[] => {
-    const c = centreOf(r);
-    return r.aStroke.flatMap(s => s.points.map(p => Math.hypot(p.x - c.x, p.y - c.y)));
+/** True while the point is inside one of the tabs, which hang out on purpose. */
+const inTab = (r: CelticResult) => (p: Point): boolean =>
+    r.aTab.some(a => {
+        const xs = a.map(q => q.x),
+            ys = a.map(q => q.y);
+        return p.x >= Math.min(...xs) - 0.01 && p.x <= Math.max(...xs) + 0.01
+            && p.y >= Math.min(...ys) - 0.01 && p.y <= Math.max(...ys) + 0.01;
+    });
+
+/** How far the drawing reaches from the middle, the tabs discounted. */
+const reachOf = (r: CelticResult): number => {
+    const c = centreOf(r),
+        tab = inTab(r);
+    let far = 0;
+    for (const p of cutPoints(r)) if (!tab(p)) far = Math.max(far, Math.hypot(p.x - c.x, p.y - c.y));
+    return far;
 };
 
-/** The same, but as the painted stroke reaches — half a width either side. */
-const paintedRadius = (r: CelticResult): number => {
-    const c = centreOf(r);
-    let worst = 0;
-    for (const s of r.aStroke) {
-        for (const p of s.points) worst = Math.max(worst, Math.hypot(p.x - c.x, p.y - c.y) + s.width / 2);
+/** Crossing number: whether a point is inside a closed ring. */
+const inRing = (a: Point[], p: Point): boolean => {
+    let inside = false;
+    for (let i = 0, j = a.length - 1; i < a.length; j = i++) {
+        const q = a[i]!,
+            s = a[j]!;
+        if ((q.y > p.y) !== (s.y > p.y) && p.x < ((s.x - q.x) * (p.y - q.y)) / (s.y - q.y) + q.x) inside = !inside;
     }
-    for (const o of r.aLeaf) {
-        for (const p of leafRing(o)) worst = Math.max(worst, Math.hypot(p.x - c.x, p.y - c.y));
-    }
-    return worst;
+    return inside;
 };
 
-const span = (a: { x: number; y: number }[]) => ({
+/** Outlines less the holes in them: the material that is actually left. */
+const areaOf = (a: Region[]): number =>
+    a.reduce((s, o) => s + o.rings.reduce((t, ring, i) => t + (i === 0 ? 1 : -1) * Math.abs(signedArea(ring)), 0), 0);
+
+const span = (a: Point[]) => ({
     w: Math.max(...a.map(p => p.x)) - Math.min(...a.map(p => p.x)),
     h: Math.max(...a.map(p => p.y)) - Math.min(...a.map(p => p.y))
 });
 
-describe("nothing leaves the disc", () => {
-    it("keeps every branch inside the circle the branches grow into", () => {
-        // The failure this pins is a specific one and it is silent. Every fork
-        // in the tree hands its children an allowance, and the chain of limbs
-        // off one fork adds up to exactly that allowance — so the allowance is
-        // the distance the outermost tip travels. Neither fork is in the middle
-        // of the disc (the crown starts above it, the roots below), so a limb
-        // leaving one sideways has most of a disc more room than one leaving it
-        // outwards. Given a single number for all of them, the outward ones
-        // walk out through the rim, and the traced silhouette then has twigs
-        // sticking out past the edge of a disc that is supposed to be round.
-        for (const twist of [0, 0.5, 1]) {
-            for (const branches of [2, 3, 5]) {
-                const r = tree({ twist, branches }),
-                    reach = reachOf(r);
-                expect(Math.max(...strokeRadii(r)), `twist ${twist}, ${branches} ways`)
-                    .toBeLessThanOrEqual(reach + 0.01);
-            }
-        }
-    });
+const has = (r: CelticResult, re: RegExp): boolean => r.warnings.some(s => re.test(s));
 
-    it("keeps the painted width inside the disc too, not just the centreline", () => {
-        // A centreline inside the rim is not enough: the stroke is painted at
-        // its full width, so the thing that has to fit is the centreline plus
-        // half a branch. The trunk is the widest stroke in the drawing and it
-        // is the one that used to bulge, because with the roots switched off it
-        // ran all the way down to the same reach a hairline twig does.
-        for (const size of [60, 150, 300]) {
-            for (const roots of [true, false]) {
-                for (const border of ["plain", "braid", "knot"] as const) {
-                    const r = tree({ size, roots, border, borderWidth: Math.max(6, size * 0.07) });
-                    expect(paintedRadius(r), `⌀ ${size}, roots ${roots}, ${border}`)
+// ---------------------------------------------------------------------------
+
+describe("nothing leaves the disc", () => {
+    it("keeps the whole cut drawing inside the circle it is supposed to be", { timeout: 120000 }, () => {
+        // The builder has no clip in it. Containment comes from three separate
+        // pieces of arithmetic — a limb is stopped at the reach circle half a
+        // band inside the rim, the braid's crest touches the outer circle
+        // exactly and an offset moves a point by at most half a width, and a
+        // leaf that would cross the rim is dropped — and this is the test that
+        // all three are still true. Measured on the *merged* rings rather than
+        // on the centrelines, because it is the merged rings that get burnt.
+        for (const size of [60, 150, 300, 400]) {
+            for (const ringWidth of [4, 12, 24]) {
+                for (const density of [2, 5, 10]) {
+                    const r = tree({ size, ringWidth, density, base: false });
+                    expect(reachOf(r), `⌀ ${size}, ring ${ringWidth}, ${density} primaries`)
                         .toBeLessThanOrEqual(r.size / 2 + 0.01);
                 }
             }
         }
     });
 
-    it("throws away leaves that would poke out through the ring", () => {
+    it("keeps it inside with the tabs on too, which are the only thing let out", () => {
+        const r = tree({ base: true });
+        expect(reachOf(r)).toBeLessThanOrEqual(r.size / 2 + 0.01);
+        // And it does not simply pass because the tabs swallowed everything:
+        // the drawing really does come right out to the rim.
+        expect(reachOf(r)).toBeGreaterThan(r.size / 2 - 0.01);
+    });
+
+    it("says so rather than quietly shaving it off, if it ever does happen", () => {
+        // The warning is the whole reason there is no clip. A clip would hide
+        // the fault; this way the tool says the arithmetic has broken.
+        for (const seed of [1, 2, 3]) expect(has(tree({ seed }), /past the edge of the disc/)).toBe(false);
+    });
+
+    it("throws away a leaf that would poke out through the ring", () => {
         // A leaf half in and half out of the band turns the outside edge of the
-        // disc into a row of bumps, which is worse than one fewer leaf.
-        const r = tree({ leafSize: 25 }),
-            c = centreOf(r),
-            reach = reachOf(r);
-        for (const o of r.aLeaf) {
-            expect(Math.hypot(o.x - c.x, o.y - c.y) + o.length / 2).toBeLessThanOrEqual(reach + 0.02);
+        // disc into a row of bumps, which is worse than one fewer leaf. Into
+        // the band is fine and is the point.
+        const r = tree({ leafSize: 20 }),
+            c = centreOf(r);
+        for (const o of [...r.aLeaf, ...r.aLeafMark]) {
+            expect(Math.hypot(o.x - c.x, o.y - c.y) + o.length / 2).toBeLessThanOrEqual(r.size / 2 + 0.02);
         }
     });
 
@@ -130,8 +161,334 @@ describe("nothing leaves the disc", () => {
     });
 });
 
-describe("the leaf floor", () => {
+describe("it comes off the bed as one piece", () => {
+    it("merges the whole drawing into a single region at the defaults", () => {
+        const r = tree();
+        expect(r.aCut).toHaveLength(1);
+        expect(r.bJoined).toBe(true);
+        // And it is one region because everything touches, not because it is
+        // one blob: the openwork is there, as holes in that region.
+        expect(r.holes).toBeGreaterThan(50);
+    });
+
+    it("stays one piece across the seeds and across the parameter space", { timeout: 120000 }, () => {
+        // The structural rule is that every root reaches the ring and every
+        // primary carries one chain that is forced out to it. Without those two
+        // a seed now and then grows a quadrant of drooping twigs, the tree
+        // hangs off three joins, and the thin ones tear.
+        const bad: string[] = [];
+        for (let seed = 1; seed <= 8; seed++) {
+            for (const patch of [
+                {},
+                { density: 2, depth: 2 },
+                { density: 10, depth: 5 },
+                { ringWidth: 4 },
+                { base: false },
+                { trunk: 2, branch: 1 },
+                { variance: 0 },
+                { variance: 1 }
+            ]) {
+                const r = tree({ ...patch, seed });
+                if (!r.bJoined) bad.push(`seed ${seed} ${JSON.stringify(patch)} → ${r.aCut.length}`);
+            }
+        }
+        expect(bad).toEqual([]);
+    });
+
+    it("counts the contours it is going to cut", () => {
+        const r = tree();
+        expect(r.pieces).toBe(r.aCut.length + r.holes);
+        expect(r.pieces).toBe(r.aCut.reduce((n, o) => n + o.rings.length, 0));
+    });
+});
+
+describe("every cutout is a hole, not another outline", () => {
+    it("puts the openwork inside the outline rather than beside it", () => {
+        // The difference between a hole and a second outline does not show on
+        // screen, and does show the moment anything fills the file or a nesting
+        // tool tries to place the piece.
+        const r = tree(),
+            o = r.aCut[0]!;
+        expect(o.rings.length).toBeGreaterThan(1);
+        for (const hole of o.rings.slice(1)) {
+            for (const p of hole) expect(inRing(o.rings[0]!, p)).toBe(true);
+        }
+    });
+
+    it("winds the holes against the outline, which is what even-odd is written for", () => {
+        const o = tree().aCut[0]!,
+            outer = Math.sign(signedArea(o.rings[0]!));
+        expect(outer).not.toBe(0);
+        for (const hole of o.rings.slice(1)) expect(Math.sign(signedArea(hole))).toBe(-outer);
+    });
+
+    it("leaves the biggest ring as the outline", () => {
+        const o = tree().aCut[0]!,
+            areas = o.rings.map(a => Math.abs(signedArea(a)));
+        expect(areas[0]).toBe(Math.max(...areas));
+    });
+
+    it("cuts nothing that is too small to be a hole", { timeout: 120000 }, () => {
+        // Where two strands touch almost tangentially, or a leaf's tip grazes
+        // its own twig, the union is quite right to report a hole and the hole
+        // is two tenths of a millimetre across. The beam is one tenth: what
+        // that cuts is a scorch dot with a whole closed path spent on getting
+        // to it, and with the braid gap closed up there are seventy of them.
+        for (const patch of [{}, { braidGap: 0 }, { braidGap: 3 }, { size: 60, ringWidth: 6 }, { density: 10, depth: 5 }]) {
+            const r = tree(patch);
+            for (const o of r.aCut) {
+                for (const ring of o.rings) {
+                    expect(Math.abs(signedArea(ring)), JSON.stringify(patch)).toBeGreaterThanOrEqual(0.25);
+                }
+            }
+        }
+    });
+
+    it("cuts real openwork between the strands of the plait", () => {
+        // The gaps in the braid are the whole reason the braid gap control
+        // exists, and they only become holes because of the two rims. Opening
+        // the gap opens them up; closing it to nothing shuts them.
+        const wide = tree({ braidGap: 3, leaves: false, density: 2, depth: 2 }),
+            shut = tree({ braidGap: 0, leaves: false, density: 2, depth: 2 });
+        expect(wide.holes).toBeGreaterThan(shut.holes);
+    });
+});
+
+describe("the plaited frame", () => {
+    it("splits the band into three strands with the gap taken out of each", () => {
+        // The gap comes out of the strand rather than out of the ring, which is
+        // what makes it read as "how much whitespace".
+        for (const ringWidth of [6, 12, 24]) {
+            for (const braidGap of [0, 1.2, 3]) {
+                const r = tree({ ringWidth, braidGap });
+                expect(r.ring.strand, `ring ${ringWidth}, gap ${braidGap}`)
+                    .toBeCloseTo(Math.max(0.3, ringWidth / CELTIC_LIMITS.strands - braidGap), 6);
+            }
+        }
+    });
+
+    it("puts a rim at each edge of the band, and never nothing", () => {
+        const r = tree({ ringWidth: 12 });
+        expect(r.ring.rim).toBeGreaterThan(0);
+        expect(r.ring.rim).toBeLessThan(r.ring.outer - r.ring.inner);
+        expect(r.ring.outer - r.ring.inner).toBeCloseTo(12, 6);
+        // Even on a band too narrow to deserve one, because a band with no rim
+        // has no holes in it — only notches — and nothing for a branch to land
+        // on.
+        expect(tree({ ringWidth: 3 }).ring.rim).toBeGreaterThan(0);
+    });
+
+    it("holds the knot density where the whitespace would close up", () => {
+        // A strand sweeps the band twice per loop, so past some density the
+        // sweep is steeper than the strand is wide and consecutive passes
+        // merge. The ceiling follows the circumference rather than being a
+        // number typed into the limits.
+        const tight = tree({ size: 60, ringWidth: 12, knotDensity: 40 });
+        expect(tight.ring.lobes).toBeLessThan(40);
+        expect(has(tight, /held to \d+ loops/)).toBe(true);
+
+        const roomy = tree({ size: 400, ringWidth: 12, knotDensity: 20 });
+        expect(roomy.ring.lobes).toBe(20);
+        expect(has(roomy, /held to \d+ loops/)).toBe(false);
+    });
+
+    it("takes the loop count it is given, inside that ceiling", () => {
+        expect(tree({ knotDensity: 7 }).ring.lobes).toBe(7);
+        expect(tree({ knotDensity: 18 }).ring.lobes).toBe(18);
+        expect(tree({ knotDensity: 1 }).ring.lobes).toBe(CELTIC_LIMITS.minKnot);
+    });
+
+    it("says when the gap has eaten the strands", () => {
+        expect(has(tree({ ringWidth: 6, braidGap: 1.6 }), /gap has eaten the strands/)).toBe(true);
+        expect(has(tree({ ringWidth: 12, braidGap: 1.2 }), /gap has eaten the strands/)).toBe(false);
+    });
+});
+
+describe("the tree", () => {
+    it("takes the trunk and the branches as two independent numbers", () => {
+        // They used to be one: every branch was a fraction of the trunk, which
+        // made a heavy trunk under fine branches impossible to draw. The trunk
+        // is the first stroke in the list and the first primary is the second,
+        // so the two numbers can be read straight off.
+        for (const trunk of [4, 9, 20]) {
+            for (const branch of [2, 5, 9]) {
+                const r = tree({ trunk, branch });
+                expect(r.aStroke[0]!.w0, `trunk ${trunk}`).toBeCloseTo(trunk * 2.2, 6);
+                // Capped against the trunk, because a branch wider than the
+                // thing it grows out of is not a tree.
+                expect(r.aStroke[1]!.w0, `trunk ${trunk}, branch ${branch}`)
+                    .toBeCloseTo(Math.min(branch, trunk * 1.6), 6);
+            }
+        }
+        // And the twigs follow the branch control rather than the trunk one.
+        expect(tree({ trunk: 9, branch: 9 }).thinnest).toBeGreaterThan(tree({ trunk: 9, branch: 2 }).thinnest);
+    });
+
+    it("refuses a branch wider than the trunk it grows out of", () => {
+        const r = tree({ trunk: 2, branch: 20 });
+        expect(Math.max(...r.aStroke.slice(1).map(s => s.w0))).toBeLessThanOrEqual(2 * 1.6 + 1e-9);
+    });
+
+    it("varies the taper from limb to limb, and does it the same way every time", () => {
+        // Every limb at a level used to come out at exactly the same width. The
+        // variation is on the taper rather than on the starting width, so a
+        // limb still leaves its parent at the width its parent arrived at —
+        // otherwise every fork has a visible step in it.
+        const r = tree(),
+            ratios = r.aStroke.slice(1).map(s => s.w1 / s.w0),
+            lo = Math.min(...ratios),
+            hi = Math.max(...ratios);
+        expect(hi).toBeGreaterThan(lo * 1.2);
+        expect(lo).toBeGreaterThanOrEqual(0.74 * 0.85 - 1e-9);
+        expect(hi).toBeLessThanOrEqual(0.74 * 1.15 + 1e-9);
+        // Deterministic: the seed is the whole of the tool's memory.
+        expect(tree().aStroke.map(s => s.w1)).toEqual(r.aStroke.map(s => s.w1));
+        expect(tree({ seed: 2 }).aStroke.map(s => s.w1)).not.toEqual(r.aStroke.map(s => s.w1));
+    });
+
+    it("grows more limbs with the density and with the depth", () => {
+        expect(tree({ density: 8 }).branchCount).toBeGreaterThan(tree({ density: 3 }).branchCount);
+        expect(tree({ depth: 5 }).branchCount).toBeGreaterThan(tree({ depth: 3 }).branchCount);
+    });
+
+    it("takes ten primaries now, and still merges into one piece at ten", () => {
+        // The ceiling was five. Ten is the measured limit: the twig count is
+        // density × 2^(depth−1), and past ten at four levels the tips are
+        // closer together round the rim than the twigs are wide.
+        expect(CELTIC_LIMITS.maxDensity).toBe(10);
+        const r = tree({ density: 10 });
+        expect(r.bJoined).toBe(true);
+        expect(r.branchCount).toBeGreaterThan(tree({ density: 5 }).branchCount);
+        // And it is clamped rather than trusted.
+        expect(tree({ density: 40 }).branchCount).toBe(r.branchCount);
+    });
+
+    it("thins every level by about the same fraction, so depth is what makes twigs fragile", () => {
+        expect(tree({ depth: 5 }).thinnest).toBeLessThan(tree({ depth: 4 }).thinnest);
+        expect(tree({ branch: 12 }).thinnest).toBeGreaterThan(tree({ branch: 5 }).thinnest);
+    });
+
+    it("runs the roots into the band, every one of them", () => {
+        // Roots are the anchor. A crown twig may droop and end in mid-air —
+        // that is what makes a canopy read as grown — but a root that stops
+        // short is the bottom of the disc held on by nothing.
+        const r = tree(),
+            c = centreOf(r);
+        let deepest = 0;
+        for (const s of r.aStroke) {
+            for (const p of s.points) {
+                const dx = p.x - c.x,
+                    dy = p.y - c.y;
+                // Off the trunk's own centreline, and pointing down.
+                if (Math.abs(dx) > 2 && Math.atan2(Math.abs(dx), dy) < Math.PI * (40 / 180)) {
+                    deepest = Math.max(deepest, Math.hypot(dx, dy));
+                }
+            }
+        }
+        // Into the band rather than onto its inner circle: a limb that stops on
+        // the circle touches the frame at a tangent, and a tangent is not a
+        // join once the beam has had its tenth of a millimetre.
+        expect(deepest).toBeGreaterThan(r.ring.inner + r.ring.rim);
+        expect(deepest).toBeLessThanOrEqual(r.ring.inner + (r.ring.outer - r.ring.inner) * 0.5 + 0.01);
+    });
+
+    it("anchors the trunk's sway at its foot so it stands square on the band", () => {
+        // A trunk that leans from its own base looks like it is falling over.
+        const straight = tree({ sway: 0 }),
+            leaning = tree({ sway: 1 }),
+            footOf = (r: CelticResult) => r.aStroke[0]!.points[0]!,
+            drift = (r: CelticResult) =>
+                Math.max(...r.aStroke[0]!.points.map(p => Math.abs(p.x - footOf(r).x)));
+        expect(footOf(leaning).x).toBeCloseTo(footOf(straight).x, 6);
+        expect(drift(leaning)).toBeGreaterThan(drift(straight) + 1);
+        expect(drift(straight)).toBeCloseTo(0, 6);
+    });
+
+    it("gives the same tree back for the same seed, and a different one otherwise", () => {
+        const key = (r: CelticResult) => JSON.stringify([r.aStroke, r.aLeaf, r.aLeafMark]);
+        expect(key(tree({ seed: 4813 }))).toBe(key(tree({ seed: 4813 })));
+        expect(key(tree({ seed: 4813 }))).not.toBe(key(tree({ seed: 4814 })));
+    });
+});
+
+describe("the leaves", () => {
     const L = CELTIC_LIMITS;
+
+    const placed = (r: CelticResult): Leaf[] => [...r.aLeaf, ...r.aLeafMark];
+
+    it("draws the number asked for, up to what the twigs can hold", () => {
+        for (const leafCount of [0, 6, 24, 48]) {
+            expect(placed(tree({ leafCount })), `${leafCount} asked for`).toHaveLength(leafCount);
+        }
+        // And says so rather than silently drawing fewer when it runs out.
+        const crowded = tree({ leafCount: 300 });
+        expect(placed(crowded).length).toBeLessThan(300);
+        expect(has(crowded, /leaves were asked for/)).toBe(true);
+        expect(has(tree({ leafCount: 24 }), /leaves were asked for/)).toBe(false);
+    });
+
+    it("spaces them out instead of clumping them", () => {
+        // The complaint this fixes is that leaves stick together in bunches,
+        // because twigs arrive in bunches. Rejecting a candidate that is too
+        // near one already drawn and trying the next one is the honest fix;
+        // drawing fewer of them is not.
+        for (const leafSize of [5, 7, 12]) {
+            const r = tree({ leafSize }),
+                a = placed(r);
+            let nearest = Infinity;
+            for (let i = 0; i < a.length; i++) {
+                for (let j = i + 1; j < a.length; j++) {
+                    nearest = Math.min(nearest, Math.hypot(a[i]!.x - a[j]!.x, a[i]!.y - a[j]!.y));
+                }
+            }
+            expect(nearest, `leaf ${leafSize} mm`).toBeGreaterThanOrEqual(r.leafSize * 1.2 - 1e-9);
+        }
+    });
+
+    it("hangs them off the ends of the twigs first", () => {
+        // A tree with twelve leaves wants them at the ends of twelve twigs, not
+        // clustered halfway along four of them.
+        const few = tree({ leafCount: 12 }),
+            c = centreOf(few),
+            far = placed(few).map(o => Math.hypot(o.x - c.x, o.y - c.y));
+        expect(Math.min(...far)).toBeGreaterThan(few.size * 0.12);
+        expect(placed(tree({ leafCount: 48 })).length).toBeGreaterThan(placed(few).length);
+    });
+
+    it("engraves the ones that would be swallowed and cuts the rest", () => {
+        // The point of the rule: merged into the union, a leaf lying across a
+        // branch or across another leaf loses its own outline and the canopy
+        // comes out as a lump. Engraved, you still see it.
+        const r = tree();
+        expect(r.markCount).toBeGreaterThan(0);
+        expect(r.leafCount).toBeGreaterThan(0);
+        expect(r.leafCount + r.markCount).toBe(placed(r).length);
+        for (const o of r.aLeafMark) expect(r.aLeaf).not.toContain(o);
+    });
+
+    it("keeps the engraved ones out of the cut union entirely", () => {
+        // Not merely drawn in a different colour: an engraved leaf contributes
+        // no material at all. Adding them to the cut region afterwards makes it
+        // bigger, which it could not do if they were already in it — and adding
+        // the cut ones back changes nothing, because they are.
+        const r = tree(),
+            asRegion = (o: Leaf) => regionOf(leafRing(o));
+        expect(areaOf(union([...r.aCut, ...r.aLeafMark.map(asRegion)])))
+            .toBeGreaterThan(areaOf(r.aCut) * 1.002);
+        expect(areaOf(union([...r.aCut, ...r.aLeaf.map(asRegion)])))
+            .toBeCloseTo(areaOf(r.aCut), 3);
+    });
+
+    it("gives the engraved ones their own green layer and nothing else", () => {
+        const r = tree(),
+            sheet = celticSheet(r);
+        expect(sheet.aLayer).toHaveLength(2);
+        expect(sheet.aLayer[0]!.operation.css).toBe("#ff0000");
+        expect(sheet.aLayer[1]!.operation.css).toBe("#00a000");
+        expect(sheet.aLayer[1]!.rings).toHaveLength(r.markCount);
+        // Nothing green at all when there is nothing to engrave.
+        expect(celticSheet(tree({ leaves: false })).aLayer).toHaveLength(1);
+    });
 
     it("grows a leaf that was asked for too small, and says so", () => {
         // Not a matter of taste: the beam and the char it leaves are each about
@@ -139,148 +496,27 @@ describe("the leaf floor", () => {
         // than the hole that made it, and forty of them are a grey smudge.
         const r = tree({ leafSize: 2 });
         expect(r.leafSize).toBe(L.minLeaf);
-        expect(r.warnings.some(s => /scorch marks/.test(s))).toBe(true);
-        // Every leaf, not just the number that was typed in: they vary in
-        // size, and they vary *upwards*, so the floor holds for all of them.
-        for (const o of r.aLeaf) expect(o.length).toBeGreaterThanOrEqual(L.minLeaf);
+        expect(has(r, /scorch marks/)).toBe(true);
+        // Every leaf, not just the number that was typed in: they vary in size,
+        // and they vary *upwards*, so the floor holds for all of them.
+        for (const o of placed(r)) expect(o.length).toBeGreaterThanOrEqual(L.minLeaf);
     });
 
     it("says nothing when the leaves are big enough already", () => {
         const r = tree({ leafSize: L.minLeaf });
         expect(r.leafSize).toBe(L.minLeaf);
-        expect(r.warnings.some(s => /scorch marks/.test(s))).toBe(false);
-    });
-
-    it("leaves a bigger leaf alone", () => {
+        expect(has(r, /scorch marks/)).toBe(false);
         expect(tree({ leafSize: 11 }).leafSize).toBe(11);
     });
 
     it("draws none at all when they are switched off", () => {
-        expect(tree({ leaves: false }).leafCount).toBe(0);
-        expect(tree({ leaves: false }).aLeaf).toHaveLength(0);
+        const off = tree({ leaves: false });
+        expect(off.leafCount).toBe(0);
+        expect(off.markCount).toBe(0);
+        expect(off.aLeaf).toHaveLength(0);
+        expect(off.aLeafMark).toHaveLength(0);
         // And says nothing about a floor for leaves that do not exist.
-        expect(tree({ leaves: false, leafSize: 1 }).warnings.some(s => /scorch marks/.test(s))).toBe(false);
-    });
-});
-
-describe("how much tree there is", () => {
-    it("grows the branch count with the number of ways each limb splits", () => {
-        expect(tree({ branches: 4 }).branchCount).toBeGreaterThan(tree({ branches: 2 }).branchCount);
-    });
-
-    it("grows it with the depth too", () => {
-        expect(tree({ depth: 5 }).branchCount).toBeGreaterThan(tree({ depth: 3 }).branchCount);
-    });
-
-    it("thins every level by the same fraction, so depth is what makes twigs fragile", () => {
-        // Each limb is 72 % of its parent's width. That is where the thinnest
-        // twig comes from, and it is why adding a level is not free.
-        expect(tree({ depth: 5 }).thinnest).toBeLessThan(tree({ depth: 4 }).thinnest);
-        expect(tree({ trunk: 18 }).thinnest).toBeGreaterThan(tree({ trunk: 9 }).thinnest);
-    });
-
-    it("fills the bottom of the disc only when the roots are on", () => {
-        // Crown limbs dip below the middle whichever way this is set — the
-        // outermost pair lie almost flat and their children fan downwards, which
-        // is what fills the shoulders. So the test is the *bottom sector*: with
-        // no roots the only thing within forty degrees of straight down is the
-        // trunk running into the band on its own, and everything either side of
-        // it is bare.
-        const bottom = (r: CelticResult): number => {
-            const c = centreOf(r);
-            let far = 0;
-            for (const s of r.aStroke) {
-                for (const p of s.points) {
-                    const dx = p.x - c.x,
-                        dy = p.y - c.y;
-                    // Off the trunk's own centreline, and pointing down.
-                    if (Math.abs(dx) > 2 && Math.atan2(Math.abs(dx), dy) < Math.PI * (40 / 180)) {
-                        far = Math.max(far, Math.hypot(dx, dy));
-                    }
-                }
-            }
-            return far;
-        };
-        expect(tree({ roots: false }).branchCount).toBeLessThan(tree({ roots: true }).branchCount);
-        // A comparison rather than "nothing at all down there". The flattest
-        // crown primaries leave the trunk well below the middle now — that is
-        // what fills the shoulders — so a few of their first points fall inside
-        // a sector measured from the centre whether there are roots or not.
-        // What roots do is reach the *rim* along the bottom, and that is the
-        // thing worth pinning.
-        const bare = tree({ roots: false });
-        expect(bottom(bare)).toBeLessThan(bare.size / 2 * 0.5);
-        // And with them on the roots are *into the band*, so the disc is held
-        // from below as well as over the top. Into the band rather than onto
-        // the reach circle: limbs bend towards the horizontal as they grow, so
-        // the deepest one arrives a millimetre or so inside where a limb that
-        // grew straight would have — which is a join either way, because the
-        // band has depth. Asking for the reach circle exactly would be asking
-        // for one root that never bent at all.
-        const rooted = tree({ roots: true });
-        expect(bottom(rooted)).toBeGreaterThan(rooted.ring!.inner);
-        expect(bottom(rooted)).toBeLessThanOrEqual(reachOf(rooted) + 0.01);
-    });
-
-    it("gives the same tree back for the same seed, and a different one otherwise", () => {
-        // The seed is the whole of the tool's memory: somebody who liked tree
-        // 4813 has nothing else to go back to.
-        const key = (r: CelticResult) => JSON.stringify([r.aStroke, r.aLeaf]);
-        expect(key(tree({ seed: 4813 }))).toBe(key(tree({ seed: 4813 })));
-        expect(key(tree({ seed: 4813 }))).not.toBe(key(tree({ seed: 4814 })));
-    });
-});
-
-describe("the border", () => {
-    it("has no ring and no decoration at all when there is none", () => {
-        const r = tree({ border: "none" });
-        expect(r.ring).toBeNull();
-        expect(r.aBorderLine).toHaveLength(0);
-    });
-
-    it("gives a plain band a ring but nothing engraved into it", () => {
-        // A plain band is the strongest of the four precisely because nothing
-        // is taken out of it.
-        const r = tree({ border: "plain" });
-        expect(r.ring).not.toBeNull();
-        expect(r.aBorderLine).toHaveLength(0);
-    });
-
-    it("weaves two strands for a braid and three for a rope", () => {
-        expect(tree({ border: "braid" }).aBorderLine).toHaveLength(2);
-        expect(tree({ border: "rope" }).aBorderLine).toHaveLength(3);
-    });
-
-    it("puts a ring at every crossing of a knot", () => {
-        // Two strands plus two dots per lobe. Anything else means the dots have
-        // drifted off the crossings, which is what turns knotwork back into a
-        // sine wave.
-        const r = tree({ border: "knot" });
-        expect(r.aBorderLine.length).toBeGreaterThan(2);
-        expect((r.aBorderLine.length - 2) % 2).toBe(0);
-    });
-
-    it("scales the number of lobes with the circumference, not with a knob", () => {
-        // A knot with the same number of crossings at 60 mm and at 300 mm is
-        // either a scribble or a row of sausages, and never both right. Same
-        // band width, three times the circle: about three times the crossings.
-        const small = tree({ size: 100, border: "knot", borderWidth: 10 }).aBorderLine.length - 2,
-            big = tree({ size: 300, border: "knot", borderWidth: 10 }).aBorderLine.length - 2;
-        expect(big).toBeGreaterThan(small * 2);
-    });
-
-    it("keeps the decoration inside the band it is engraved into", () => {
-        // It is engraved rather than cut, so it may not stray out over the edge
-        // of the piece or in over the branches.
-        const r = tree({ border: "rope" }),
-            c = centreOf(r);
-        for (const a of r.aBorderLine) {
-            for (const p of a) {
-                const d = Math.hypot(p.x - c.x, p.y - c.y);
-                expect(d).toBeLessThanOrEqual(r.ring!.outer + 0.01);
-                expect(d).toBeGreaterThanOrEqual(r.ring!.inner - 0.01);
-            }
-        }
+        expect(has(tree({ leaves: false, leafSize: 1 }), /scorch marks/)).toBe(false);
     });
 });
 
@@ -306,27 +542,26 @@ describe("standing it up", () => {
         // across starts a good way above the bottom of the disc, so a tab
         // measured from *there* is shorter than the rim it has to clear: the
         // disc lands on its own edge and the slots never see it.
-        const r = tree({ base: true }),
-            bottom = r.size;
-        for (const a of r.aTab) {
-            expect(Math.max(...a.map(p => p.y))).toBeGreaterThan(bottom);
-        }
+        const r = tree({ base: true });
+        for (const a of r.aTab) expect(Math.max(...a.map(p => p.y))).toBeGreaterThan(r.size);
         // And the drawing is that much taller than the disc, or the export
         // would crop the tabs off.
         expect(r.height).toBeGreaterThan(r.size);
         expect(r.height).toBe(Math.max(...r.aTab.flatMap(a => a.map(p => p.y))));
     });
 
-    it("starts them inside the ring so they merge with it", () => {
+    it("merges them into the disc rather than leaving them beside it", () => {
         // Touching the circle at a tangent would be a hairline joint, which is
-        // no joint at all once the beam has had its tenth of a millimetre.
-        const r = tree({ base: true, border: "plain", borderWidth: 10 }),
+        // no joint at all once the beam has had its tenth of a millimetre — so
+        // they start inside the band, and the union is still one region.
+        const r = tree({ base: true }),
             c = centreOf(r);
         for (const a of r.aTab) {
             const top = Math.min(...a.map(p => p.y)),
                 x = a.reduce((s, p) => s + p.x, 0) / a.length;
-            expect(Math.hypot(x - c.x, top - c.y)).toBeLessThan(r.ring!.outer);
+            expect(Math.hypot(x - c.x, top - c.y)).toBeLessThan(r.ring.outer);
         }
+        expect(r.aCut).toHaveLength(1);
     });
 
     it("cuts the slot in each foot to the sheet plus the kerf", () => {
@@ -343,8 +578,6 @@ describe("standing it up", () => {
     });
 
     it("lays the two feet out side by side without overlapping", () => {
-        // They go out as one file, so they have to be one file you can cut
-        // rather than two shapes on top of each other.
         const r = tree({ base: true }),
             feet = r.feet!;
         expect(feet.rings).toHaveLength(4);
@@ -356,44 +589,68 @@ describe("standing it up", () => {
             expect(Math.max(...a.map(p => p.y))).toBeLessThanOrEqual(feet.height + 0.01);
         }
     });
+
+    it("gives the backing disc the same tabs, so it stands in the same feet", () => {
+        const r = tree({ base: true });
+        expect(r.aBacking).toHaveLength(1);
+        // One outline and no holes: it is the disc with nothing taken out.
+        expect(r.aBacking[0]!.rings).toHaveLength(1);
+        expect(Math.max(...r.aBacking[0]!.rings[0]!.map(p => p.y))).toBeCloseTo(r.height, 6);
+        expect(tree({ base: false }).aBacking[0]!.rings[0]!.length).toBeGreaterThan(60);
+    });
+});
+
+describe("what it writes out", () => {
+    it("writes a hairline with no fill and the even-odd rule", () => {
+        // A cut path has no width — the beam decides that — so the stroke is
+        // only there to make the path visible. The even-odd rule is stated even
+        // though there is no fill, because it is what decides whether the holes
+        // are holes the moment anybody gives the file one to look at.
+        const svg = celticToSvg(celticSheet(tree()));
+        expect(svg).toContain('stroke-width="0.1"');
+        expect(svg).toContain('fill="none"');
+        expect(svg).toContain('fill-rule="evenodd"');
+        expect(svg).toContain('stroke="#ff0000"');
+        expect(svg).toContain('stroke="#00a000"');
+    });
+
+    it("puts every hole in the same path as the outline it belongs to", () => {
+        // A hole written as a path of its own is a second cut, not a hole.
+        const r = tree(),
+            svg = celticToSvg(celticSheet(r)),
+            paths = svg.match(/<path /g) ?? [],
+            moves = (svg.match(/M-?[\d.]/g) ?? []).length;
+        expect(paths).toHaveLength(2);
+        expect(moves).toBe(r.pieces + r.markCount);
+    });
+
+    it("is as big as the drawing, tabs included", () => {
+        const r = tree({ base: true }),
+            svg = celticToSvg(celticSheet(r));
+        expect(svg).toContain(`width="${r.size}mm"`);
+        expect(svg).toContain(`height="${Math.round(r.height * 1000) / 1000}mm"`);
+    });
+
+    it("draws the stage in something you can see and the file in something you cannot", () => {
+        // The preview is a picture and the export is a cut file: at the zoom a
+        // whole disc fits at, a tenth of a millimetre is half a pixel.
+        expect(celticToSvg(celticSheet(tree()), 0.3)).toContain('stroke-width="0.3"');
+    });
 });
 
 describe("what it complains about", () => {
-    const has = (r: CelticResult, re: RegExp) => r.warnings.some(s => re.test(s));
-
     it("says when the twigs would snap being lifted off the bed", () => {
-        expect(has(tree({ trunk: 2, depth: 6 }), /snap while you are lifting/)).toBe(true);
-        expect(has(tree({ trunk: 18, depth: 3 }), /snap while you are lifting/)).toBe(false);
+        expect(has(tree({ branch: 1.5, depth: 6 }), /snap while you are lifting/)).toBe(true);
+        expect(has(tree({ branch: 12, trunk: 20, depth: 3 }), /snap while you are lifting/)).toBe(false);
     });
 
     it("says when they are merely delicate", () => {
         // Two thresholds rather than one, because "fine in plywood, gone in
         // acrylic" is a real answer and refusing to draw it is not.
-        const delicate = tree({ trunk: 6, depth: 5 });
+        const delicate = tree({ branch: 5, depth: 4, seed: 3 });
         expect(delicate.thinnest).toBeGreaterThanOrEqual(1);
         expect(delicate.thinnest).toBeLessThan(1.8);
         expect(has(delicate, /delicate in anything but plywood/)).toBe(true);
-    });
-
-    it("says that a tree with no border has nothing holding it together", () => {
-        expect(has(tree({ border: "none" }), /end in mid-air/)).toBe(true);
-        expect(has(tree({ border: "plain" }), /end in mid-air/)).toBe(false);
-    });
-
-    it("says that a base with no border is two loose rectangles", () => {
-        // The tabs hang off the rim. With no rim they hang off nothing, and
-        // nothing in the drawing says so.
-        expect(has(tree({ base: true, border: "none" }), /loose rectangles/)).toBe(true);
-        expect(has(tree({ base: false, border: "none" }), /loose rectangles/)).toBe(false);
-        expect(has(tree({ base: true, border: "braid" }), /loose rectangles/)).toBe(false);
-    });
-
-    it("says that knotwork in a narrow band engraves as a smudge", () => {
-        // The crossings end up closer together than the beam is wide, which is
-        // a property of the band width rather than of the disc.
-        expect(has(tree({ border: "knot", borderWidth: 4 }), /engraves as a smudge/)).toBe(true);
-        expect(has(tree({ border: "knot", borderWidth: 12 }), /engraves as a smudge/)).toBe(false);
-        expect(has(tree({ border: "braid", borderWidth: 4 }), /engraves as a smudge/)).toBe(false);
     });
 
     it("says when a thin sheet would make a tab that snaps in its slot", () => {
@@ -403,9 +660,28 @@ describe("what it complains about", () => {
     });
 
     it("says when there are more branches than there is disc to put them on", () => {
-        const dense = tree({ branches: 5, depth: 6 });
+        const dense = tree({ density: 10, depth: 6 });
         expect(dense.branchCount).toBeGreaterThan(400);
-        expect(has(dense, /lie on \s*top of each other|on top of each other/)).toBe(true);
-        expect(has(tree({ branches: 2, depth: 3 }), /on top of each other/)).toBe(false);
+        expect(has(dense, /on top of each other/)).toBe(true);
+        expect(has(tree({ density: 2, depth: 3 }), /on top of each other/)).toBe(false);
+    });
+});
+
+describe("how long it takes", () => {
+    it("merges a whole tree fast enough that a slider still feels live", () => {
+        // Measured rather than assumed, because this number decided the shape
+        // of the geometry: merging every limb as a soup of quads and joint
+        // discs took 810 ms, which makes every control in the tool feel broken,
+        // and offsetting each centreline into one outline instead brought it to
+        // about eighty. The budget here is generous — a CI runner is not the
+        // user's machine — but an order of magnitude of regression trips it.
+        buildCelticTree(BASE);
+        const best = Math.min(...[1, 2, 3].map(seed => tree({ seed }).unionMs));
+        expect(best).toBeLessThan(500);
+    });
+
+    it("reports what it actually took, so the tool can show it", () => {
+        expect(tree().unionMs).toBeGreaterThan(0);
+        expect(tree({ depth: 6, density: 10 }).unionMs).toBeGreaterThan(tree({ depth: 2, density: 2 }).unionMs);
     });
 });

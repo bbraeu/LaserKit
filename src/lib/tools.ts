@@ -112,12 +112,12 @@ export const TOOLS: ToolDef[] = [
         label: "Celtic tree of life",
         short: "Tree of life",
         hint: "a seed → a tree in a ring",
-        blurb: "A tree whose branches and roots both reach into the border, drawn as one silhouette rather than as lines that cross — so the overlaps are joins instead of cuts. Four border styles, leaves that are never too small to survive, and feet to stand it in.",
+        blurb: "A tree whose branches and roots both grow into a plaited Celtic ring, merged into one silhouette rather than drawn as lines that cross — so every overlap is a join instead of a second cut. Flowing curved limbs, a leaf floor so none is too small to survive the beam, and leaves that would be swallowed by their neighbours engraved instead of cut.",
         // A trunk forking into a canopy, inside a ring.
         icon: "M12 20.25V13.5m0 0-3.75-3.75M12 13.5l3.75-3.75M8.25 9.75 6 6.75m2.25 3-3 1.5m10.5-1.5L18 6.75m-2.25 3 3 1.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
         accepts: "nothing — it starts from a diameter",
         title: "Celtic tree of life generator for laser cutting | LaserKit",
-        description: "Free in-browser Celtic tree of life generator for laser cutting: branches and roots growing into a braided, roped or knotwork border, with a leaf size floor so the leaves survive the beam, tabs and feet to stand it up, and every overlap merged into one silhouette so nothing is cut twice. Exports SVG, DXF and Falcon Design Space (.fds)."
+        description: "Free in-browser Celtic tree of life generator for laser cutting: curved branches and roots growing into a generated plaited knot ring, with the loop count and braid whitespace under your control, a leaf size floor so the leaves survive the beam, overlapping leaves engraved rather than cut, and the whole design merged by real vector booleans into one closed path so nothing is cut twice. Exports SVG, DXF and Falcon Design Space (.fds)."
     },
     {
         id: "qr",

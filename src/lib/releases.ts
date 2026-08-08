@@ -30,6 +30,22 @@ export const REPO = "https://github.com/bbraeu/LaserKit";
 
 export const RELEASES: Release[] = [
     {
+        version: "3.20.0",
+        date: "2026-08-08",
+        title: "A generated knot ring, and leaves you can see",
+        tools: ["celtic"],
+        notes: [
+            "The border is a real plaited knot now, generated rather than suggested: three strands weaving round the band, with the number of loops and the whitespace between them under your control. It is cut rather than engraved, so the openings in the plait are openings.",
+            "The branches are flowing curves instead of arcs of a constant turn, and the trunk flares at the foot and sways from its base.",
+            "Trunk thickness and branch thickness are two controls. They used to be one number — every branch was a fraction of the trunk — so a heavy trunk under fine branches could not be drawn at all. Each limb's taper also varies a little, which is what stops a tree reading as a diagram of a tree.",
+            "Up to ten primaries off the trunk instead of five. Ten is where it stops: past that the tips are closer together than the twigs are wide, so the drawing stops changing and only the cutting time goes up.",
+            "Leaves are spread rather than piled — a leaf too close to one already placed is rejected — and there is a count as well as a size.",
+            "A leaf that overlaps a branch or another leaf is now engraved rather than cut. It would otherwise lose its own outline in the merge, which is why the canopy used to come out as a blob: leaves genuinely lose about half their area to their neighbours. The green line is the same line engraving it is everywhere else in the kit.",
+            "The whole design is merged by real vector booleans instead of being painted onto a canvas and traced back out. No raster round trip, so no staircased edges and a fraction of the points — and the status bar can now tell you whether it really is one piece, which is the one thing the canvas cannot show you.",
+            "The export is a hairline: 0.1 mm, fill none, even-odd, with every inner cutout a subpath of the outline rather than a separate shape."
+        ]
+    },
+    {
         version: "3.19.0",
         date: "2026-08-08",
         title: "Motifs that overlap, and the booleans that make it safe",

@@ -5,10 +5,10 @@ import CelticTool from "../tools/CelticTool";
 
 <ToolPage tool="celtic">
     <Fragment slot="lead">
-        A tree whose branches reach up into a ring and whose roots reach down into the same ring, so the whole thing
-        is <strong class="text-slate-300">one closed piece</strong>. Four border styles, leaves that are never smaller
-        than the beam that makes them, and two feet to stand it in — with every overlap merged away before anything is
-        exported, because a line crossing another line is, to a laser, a pair of cuts through both.
+        A tree whose branches and roots both run into a plaited Celtic ring, merged with
+        <strong class="text-slate-300">real vector booleans</strong> into one closed piece — no raster round trip, no
+        seam where two branches cross. Generative knotwork, flowing Bézier limbs, and leaves that are engraved rather
+        than cut when they would otherwise be swallowed.
     </Fragment>
 
     <CelticTool client:only="react">
@@ -35,69 +35,89 @@ import CelticTool from "../tools/CelticTool";
                     trunk on its way past, and the piece arrives as confetti.
                 </p>
                 <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
-                    So nothing here is drawn as an outline. The generator produces
-                    <strong class="text-slate-300">centrelines with widths</strong> — the trunk, every branch, every
-                    root — plus leaves, a ring and the tabs, and the tool paints the lot onto a canvas and traces the
-                    result exactly <em>once</em>. What comes back is the silhouette of the union: branch meets trunk
-                    with no seam, leaf overlaps leaf with no seam, and the only closed curves in the export are the
-                    real edge of the real piece and the real holes between the branches. The status bar counts them,
-                    so you can see there is one of each rather than one per crossing.
+                    So every limb, leaf, strand and tab is turned into a polygon and the lot is merged with a
+                    <strong class="text-slate-300">true boolean union</strong>. What comes back is one outline and the
+                    holes in it: branch meets trunk with no seam, leaf overlaps twig with no seam, and the only closed
+                    curves in the export are the real edge of the real piece and the real openwork between the
+                    branches. The status bar counts them, and it counts one of each rather than one per crossing.
                 </p>
                 <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
-                    One thing is deliberately kept out of that union: the border decoration. A braid engraved inside
-                    the band is a picture on the material. Painted into the silhouette it would become holes, and a
-                    band with holes in it is a band that is not there — so it is a separate engraved layer, and it is
-                    the only thing in the drawing that is not red.
+                    It used to do that by painting the drawing onto a canvas and tracing the bitmap. That worked, and
+                    it cost the one thing a cut file is for. A traced edge is a staircase at whatever resolution the
+                    canvas was, every curve came back with a few hundred points, and the whole design went through a
+                    raster round trip on its way to a vector file. There is no canvas in it now — and the status bar
+                    reports how long the booleans took, because that is the honest price of doing it properly.
                 </p>
             </div>
 
             <div class="glass reveal mt-5 rounded-2xl p-6">
-                <h2 class="text-lg font-semibold text-white">There is a floor under the leaf size</h2>
+                <h2 class="text-lg font-semibold text-white">The knot is a plan, not a weave</h2>
                 <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
-                    A tree with a hundred tiny leaves looks wonderful on screen and comes out of a laser as a hundred
-                    identical scorch marks, because each leaf is smaller than the kerf plus the char around it. The
-                    beam is about a tenth of a millimetre and so is the burn it leaves, and a leaf has to be a good
-                    deal bigger than the hole that makes it.
+                    Celtic knotwork is strands passing over and under each other, and a cut piece is flat: there is no
+                    over. So what the frame actually draws is the braid's <em>plan</em> — three sinusoidal strands
+                    sweeping in and out across the band, a third of a wavelength apart, unioned so that every crossing
+                    is a join rather than a pair of cuts. Knot density is how many loops they make round the circle;
+                    the braid gap is the whitespace between them, which on a cut piece is the hole.
                 </p>
                 <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
-                    So the floor is <strong class="text-slate-300">enforced rather than suggested</strong>. Ask for
-                    2 mm leaves and you get 4 mm leaves and a note saying why. The same reasoning is behind the
-                    thinnest-twig figure in the status bar: each level of branching is 72 % of its parent's width, so
-                    depth is what makes twigs delicate, and the number tells you before the piece does.
+                    A thin rim closes each edge of the band, and it is structural rather than trim. Without it the
+                    braid is a scalloped ring whose gaps open inwards and outwards — notches rather than holes, and a
+                    row of bumps where the outside edge of the disc should be. With it every gap becomes a real
+                    cutout, the disc has a round edge, and the inner rim is what the branches and roots land on. That
+                    last part is the whole structure: the tool tells you in the status bar whether the drawing really
+                    did merge into a single piece, because that is the one fault the canvas cannot show you.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    Density has a ceiling and it follows the circumference rather than being a number somebody picked.
+                    A strand sweeps the whole band twice per loop, so past a point the sweep is steeper than the strand
+                    is wide, consecutive passes merge, and the whitespace closes up into a plain band. The tool holds
+                    it there and says so.
                 </p>
             </div>
 
             <div class="grid gap-5 lg:grid-cols-2">
                 <div class="glass reveal mt-5 rounded-2xl p-6">
-                    <h2 class="text-lg font-semibold text-white">Four borders, and they are not all the same strength</h2>
+                    <h2 class="text-lg font-semibold text-white">Overlapping leaves are engraved, not cut</h2>
                     <p class="mt-2 text-sm leading-relaxed text-slate-400">
-                        The difference between a plain band, a braid, a rope and a knot is not only decoration. A plain
-                        band is the strongest and the dullest; the other three are the same band with line work burnt
-                        into it, which costs nothing in strength but does need room — knotwork in a narrow band engraves
-                        as a smudge, because the crossings end up closer together than the beam is wide. The number of
-                        crossings follows the circumference rather than being a knob, so a knot at 60 mm and one at
-                        300 mm are both the right density.
+                        Merged into the union, a leaf lying across a branch or across the leaf beside it loses its own
+                        outline — the file gets a lump where the drawing had two leaves, and a full canopy turns into a
+                        blob. So every leaf is measured against what is already on the sheet, and one that has lost too
+                        much of itself is moved to a green engraved layer instead: you still see every leaf, the detail
+                        survives, and no second cut line runs through the twig it hangs off. Leaves are also spread
+                        out rather than piled up, because twigs arrive in bunches and drawing every candidate is what
+                        makes them clump.
                     </p>
                 </div>
                 <div class="glass reveal mt-5 rounded-2xl p-6">
-                    <h2 class="text-lg font-semibold text-white">Something to stand it on, and something to put behind it</h2>
+                    <h2 class="text-lg font-semibold text-white">There is a floor under the leaf size</h2>
                     <p class="mt-2 text-sm leading-relaxed text-slate-400">
-                        Two tabs hang below the disc and two slotted feet take them. The tabs are painted into the
-                        disc's own outline rather than glued on afterwards, and the slot is the sheet plus the kerf,
-                        because a slot cut to the nominal thickness is a slot the tab does not go into. The optional
-                        backing disc is the same circle with nothing cut out of it and the same tabs, so it stands in
-                        the same feet directly behind the tree — cut from a contrasting sheet, it stops the openwork
-                        showing you the wall.
+                        A tree with a hundred tiny leaves looks wonderful on screen and comes out of a laser as a
+                        hundred identical scorch marks, because each leaf is smaller than the kerf plus the char around
+                        it. The beam is about a tenth of a millimetre and so is the burn it leaves. So the floor is
+                        <strong class="text-slate-300">enforced rather than suggested</strong>: ask for 2 mm leaves and
+                        you get 4 mm leaves and a note saying why. The same reasoning is behind the thinnest-twig
+                        figure — each level of branching keeps about 74 % of its parent's width, so depth is what makes
+                        twigs delicate, and the number tells you before the piece does.
                     </p>
                 </div>
             </div>
 
-            <p class="reveal mt-5 text-xs leading-relaxed text-slate-500">
-                Every cut line comes out of a trace, so it is only ever as true as the raster under it — about an
-                eighth of a millimetre, which is under the kerf and therefore under anything you could measure on the
-                finished piece. On a disc over about 200 mm the resolution comes down rather than the canvas growing
-                to twenty megapixels, and the accuracy with it.
-            </p>
+            <div class="glass reveal mt-5 rounded-2xl p-6">
+                <h2 class="text-lg font-semibold text-white">What comes out of it</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    A hairline: 0.1 mm stroke, no fill, and every hole written as a subpath of the same path under the
+                    even-odd rule, so a cutout stays a cutout in anything that opens the file. Nothing in the export
+                    depends on winding order, which is the one thing a boolean library is entitled to change. The
+                    engraved leaves are their own green layer, and the optional tabs, feet and backing disc are their
+                    own files.
+                </p>
+                <p class="mt-2 max-w-3xl text-sm leading-relaxed text-slate-400">
+                    Nothing in the drawing is allowed outside the circle, and that is a property of how the geometry is
+                    built rather than a clip taken afterwards: a limb stops half a band inside the rim, the braid's
+                    crest touches the outer circle exactly, and a leaf that would cross it is dropped. If any of that
+                    ever stops being true, the tool measures it and says so instead of quietly shaving the bulge off.
+                </p>
+            </div>
         </div>
     </section>
 </ToolPage>
