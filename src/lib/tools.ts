@@ -107,6 +107,19 @@ export const TOOLS: ToolDef[] = [
         description: "Free in-browser mandala and sunburst generator for laser cutting: radial patterns at any diameter and symmetry with four motifs, concentric rings, a hub and a hanging hole — and the web between motifs measured in millimetres so a cut one does not fall apart. Exports SVG, DXF and Falcon Design Space (.fds)."
     },
     {
+        id: "celtic",
+        slug: "celtic/",
+        label: "Celtic tree of life",
+        short: "Tree of life",
+        hint: "a seed → a tree in a ring",
+        blurb: "A tree whose branches and roots both reach into the border, drawn as one silhouette rather than as lines that cross — so the overlaps are joins instead of cuts. Four border styles, leaves that are never too small to survive, and feet to stand it in.",
+        // A trunk forking into a canopy, inside a ring.
+        icon: "M12 20.25V13.5m0 0-3.75-3.75M12 13.5l3.75-3.75M8.25 9.75 6 6.75m2.25 3-3 1.5m10.5-1.5L18 6.75m-2.25 3 3 1.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z",
+        accepts: "nothing — it starts from a diameter",
+        title: "Celtic tree of life generator for laser cutting | LaserKit",
+        description: "Free in-browser Celtic tree of life generator for laser cutting: branches and roots growing into a braided, roped or knotwork border, with a leaf size floor so the leaves survive the beam, tabs and feet to stand it up, and every overlap merged into one silhouette so nothing is cut twice. Exports SVG, DXF and Falcon Design Space (.fds)."
+    },
+    {
         id: "qr",
         slug: "qr/",
         label: "QR code",

@@ -30,6 +30,22 @@ export const REPO = "https://github.com/bbraeu/LaserKit";
 
 export const RELEASES: Release[] = [
     {
+        version: "3.17.0",
+        date: "2026-08-08",
+        title: "Celtic tree of life",
+        tools: ["celtic"],
+        notes: [
+            "New tool. A tree whose branches reach up into a ring and whose roots reach down into the same ring, so the whole thing comes off the bed as one piece.",
+            "Nothing in it is drawn as an outline. It is centrelines with widths — the trunk, every branch, every root — plus leaves and a ring, all painted onto a canvas and traced once. That matters because a tree is lines that cross, and a line crossing another line is, to a laser, a pair of cuts through both of them. Painted and traced, branch meets trunk with no seam and leaf overlaps leaf with no seam: the only closed curves in the export are the real edge of the piece and the holes between the branches.",
+            "Four border styles — plain, braid, rope and knotwork — engraved into the band rather than cut out of it, so the decoration costs no strength. The number of crossings follows the circumference instead of being a slider, because the same setting is a scribble at 60 mm and a row of sausages at 300.",
+            "A base, optionally: two tabs under the disc and two slotted feet to stand it in. The slot is the sheet thickness plus the kerf, because a slot cut to the nominal thickness is a slot the tab does not go into. There is a plain backing disc too, with the same tabs, so it stands in the same feet.",
+            "Leaves have a floor of 4 mm and it is enforced rather than suggested. Below that a cut leaf is a hole the size of the beam plus its own char, and forty of them turn the canopy into a grey smudge — ask for smaller and the tool grows them and says so.",
+            "Branches fork in two, always; the branches control is how many primaries leave the trunk. A three-way split four levels deep gives eighty-one tips all landing on the same ring, and what arrives is a comb rather than a tree.",
+            "The flatter a primary is aimed, the further down the trunk it leaves from. Without that the shoulders of the disc — the patches at nine and three o'clock — have nothing in them, because a limb bends towards the horizontal and then stays at the height it left the trunk at. It is also simply what a tree does.",
+            "The status bar reports the thinnest twig, which is the first thing to snap while you are lifting the piece off the bed."
+        ]
+    },
+    {
         version: "3.16.0",
         date: "2026-08-08",
         title: "Build a mandala out of parts",
