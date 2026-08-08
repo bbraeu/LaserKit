@@ -15,8 +15,7 @@ import { PresetList } from "../workspace/PresetList";
 import type { Preset } from "../workspace/PresetList";
 import { Preview } from "../workspace/Preview";
 import { Workspace } from "../workspace/Workspace";
-import { Field, ReadoutGrid, SegmentedField, SelectField, ToggleField } from "../workspace/fields";
-import { MeasureField } from "../workspace/fields/MeasureField";
+import { Field, ReadoutGrid, SegmentedField, SelectField, SliderField, ToggleField } from "../workspace/fields";
 import { NumberField } from "../workspace/fields/NumberField";
 import { designExports, textBlob } from "../workspace/formats";
 import { useDebouncedBuild } from "../workspace/hooks/useDebouncedBuild";
@@ -626,7 +625,7 @@ export default function CalendarTool() {
                     mode — the gap is measured between cells, and there is one
                     cell. */}
                 {bYear && (
-                    <MeasureField
+                    <SliderField
                         label={bCards ? "Between cards" : "Between months"}
                         hint={bCards
                             ? "Room for the head to get round a card without scorching the next one."
@@ -648,7 +647,7 @@ export default function CalendarTool() {
                 */}
                 {bCards && (
                     <>
-                        <MeasureField
+                        <SliderField
                             label="Card margin"
                             hint="What your fingers hold, and what keeps the cut line off the last column of days."
                             value={p.frameMargin}
@@ -657,7 +656,7 @@ export default function CalendarTool() {
                             step={0.5}
                             onChange={n => params.set({ frameMargin: n }, { label: "Card margin", coalesce: "frameMargin" })}
                         />
-                        <MeasureField
+                        <SliderField
                             label="Card corners"
                             hint="Rounded corners cut faster than square ones and survive a pocket."
                             value={p.frameRadius}
@@ -677,7 +676,7 @@ export default function CalendarTool() {
                             onChange={b => params.set({ outline: b }, { label: "Board" })}
                         />
                         {p.outline && (
-                            <MeasureField
+                            <SliderField
                                 label="Board corners"
                                 value={p.radius}
                                 min={0}
@@ -699,7 +698,7 @@ export default function CalendarTool() {
                     choices={aFont.map(o => ({ id: o.id, label: o.label }))}
                     onChange={v => params.set({ fontFamily: v }, { label: "Font" })}
                 />
-                <MeasureField
+                <SliderField
                     label="Letter height"
                     hint="Cap height. A whole year at 4 mm is about an A4 board; below 3 mm the digits close up."
                     value={p.capHeight}
@@ -733,7 +732,7 @@ export default function CalendarTool() {
                     onChange={b => params.set({ sheetFrames: b }, { label: "Frames" })}
                 />
                 {p.sheetFrames && bCards && (
-                    <MeasureField
+                    <SliderField
                         label="Rule inset"
                         hint="How far the engraved rule sits inside the cut edge."
                         value={p.frameInset}
@@ -745,7 +744,7 @@ export default function CalendarTool() {
                 )}
                 {p.sheetFrames && !bCards && (
                     <>
-                        <MeasureField
+                        <SliderField
                             label="Frame margin"
                             hint="Clear space between a month and the rule drawn round it."
                             value={p.frameMargin}
@@ -754,7 +753,7 @@ export default function CalendarTool() {
                             step={0.5}
                             onChange={n => params.set({ frameMargin: n }, { label: "Frame margin", coalesce: "frameMargin" })}
                         />
-                        <MeasureField
+                        <SliderField
                             label="Frame corners"
                             value={p.frameRadius}
                             min={0}
@@ -773,7 +772,7 @@ export default function CalendarTool() {
                 worked out from, and nothing else in this tool asks. */}
             {bCards && (
                 <PanelSection id="cal-make" title="Fabrication" icon={<Layers3 className="size-3" />}>
-                    <MeasureField
+                    <SliderField
                         label="Sheet width"
                         hint="The cards are nested in rows no wider than this — set it to your machine's bed."
                         value={p.sheetWidth}
@@ -784,7 +783,7 @@ export default function CalendarTool() {
                     />
                     {p.holder && (
                         <>
-                            <MeasureField
+                            <SliderField
                                 label="Thickness"
                                 hint="Every joint in the tray is exactly this deep, so measure the board rather than trusting the label."
                                 value={p.thickness}
@@ -793,7 +792,7 @@ export default function CalendarTool() {
                                 step={0.1}
                                 onChange={n => params.set({ thickness: n }, { label: "Thickness", coalesce: "thickness" })}
                             />
-                            <MeasureField
+                            <SliderField
                                 label="Kerf"
                                 hint="How much width the beam burns away. Taken out of every finger and added to every notch."
                                 value={p.kerf}

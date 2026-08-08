@@ -179,3 +179,16 @@ describe("the exports", () => {
         expect(r.aLayer).toHaveLength(1);
     });
 });
+
+describe("the quiet border, now that it is not a control", () => {
+    it("still complains about a code that arrives with too little of one", () => {
+        // The slider is gone: the specification asks for four modules, every
+        // value below four made the tool complain and every value above four
+        // only wasted material, so its single correct position was its default.
+        // The check stays, because a link somebody bookmarked before that
+        // change still carries whatever they had set — and a code that will not
+        // scan should say so rather than look fine.
+        expect(qr({ quiet: 0 }).warnings.some(s => /quiet border of four/.test(s))).toBe(true);
+        expect(qr({ quiet: 4 }).warnings.some(s => /quiet border of four/.test(s))).toBe(false);
+    });
+});

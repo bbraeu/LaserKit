@@ -47,11 +47,6 @@ test("puts the module size in front of you, and warns when it is too small", asy
     await expect(page.getByRole("tooltip")).toContainText("stops scanning");
 });
 
-test("says so when the quiet border has been taken away", async ({ page }) => {
-    await setNum(page, "Quiet border", 0);
-    await page.getByTestId("statusbar").getByRole("button", { name: /notes?$/ }).hover();
-    await expect(page.getByRole("tooltip")).toContainText("quiet border of four");
-});
 
 test("costs modules for more error correction", async ({ page }) => {
     await setText(page, "x".repeat(100));

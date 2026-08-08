@@ -59,19 +59,19 @@ const PRESETS: Preset<QrParams>[] = [
         id: "tag",
         label: "Link on a tag",
         hint: "50 mm, engraved, medium correction",
-        patch: { size: 50, ecc: "M", mode: "engrave", quiet: 4, outline: true, radius: 3 }
+        patch: { size: 50, ecc: "M", mode: "engrave", outline: true, radius: 3 }
     },
     {
         id: "tough",
         label: "Something that gets handled",
         hint: "High correction, a bigger plate",
-        patch: { size: 80, ecc: "Q", mode: "engrave", quiet: 4 }
+        patch: { size: 80, ecc: "Q", mode: "engrave" }
     },
     {
         id: "sticker",
         label: "No plate",
         hint: "Just the code, to engrave on something you have",
-        patch: { outline: false, quiet: 4, mode: "engrave" }
+        patch: { outline: false, mode: "engrave" }
     },
     {
         id: "inlay",
@@ -197,20 +197,17 @@ export default function QrTool() {
                 <SliderField
                     label="Plate"
                     hint="The whole square including the quiet border. The module size follows from this and from how much the code has to carry."
+                    // The quiet border used to be a slider here and should never
+                    // have been. The specification asks for four modules, every
+                    // value below four made the tool complain, every value above
+                    // four only wasted material, and all four presets set it to
+                    // four — which is a control whose single correct position is
+                    // its default. It is fixed at four now and folded into this
+                    // size, which is what the label has always said it includes.
                     value={p.size}
                     min={L.minSize}
                     max={300}
                     onChange={n => params.set({ size: n }, { label: "Plate size", coalesce: "size" })}
-                />
-                <SliderField
-                    label="Quiet border"
-                    hint="Light margin around the code, in modules. The spec asks for four, and readers genuinely do fail without it — it is how a scanner finds where the code stops."
-                    value={p.quiet}
-                    min={0}
-                    max={L.maxQuiet}
-                    step={1}
-                    unit=""
-                    onChange={n => params.set({ quiet: Math.round(n) }, { label: "Quiet border", coalesce: "quiet" })}
                 />
                 {result && (
                     <p className="text-[11px] leading-relaxed text-subtle-foreground">

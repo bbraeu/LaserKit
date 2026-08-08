@@ -30,6 +30,20 @@ export const REPO = "https://github.com/bbraeu/LaserKit";
 
 export const RELEASES: Release[] = [
     {
+        version: "3.21.0",
+        date: "2026-08-08",
+        title: "One measurement row for the whole kit",
+        tools: ["qr", "maze", "calendar"],
+        notes: [
+            "Every slider in the kit now rounds to its own step. Radix hands back min + n·step in floating point, so a step of 0.01 landed on 0.15000000000000002 — and the number box beside it showed exactly that. It affected every kerf, fit and clearance control in the box and hinge tools, the puzzle's knob size and the mandala's hub.",
+            "A slider now says its value out loud with its unit — 0.15 mm rather than 0.15 — through aria-valuetext, which is the attribute ARIA provides for it. The slider's *name* stays the name of the parameter: a name that changes while you drag is a different control every frame.",
+            "A count can say what it is counting, so a reader hears “14 squares” rather than “14”. Without that the promise fails on exactly the controls that have no unit.",
+            "The calendar's own measurement row is gone and it uses the shared one. It was introduced an hour earlier as a calendar-specific component, which is the mistake that leaves a kit with three spellings of the same control; its two real improvements are now everybody's.",
+            "The QR code's quiet border is no longer a slider. The specification asks for four modules, every value below four made the tool complain, every value above four only wasted material, and all four presets set it to four — a control whose single correct position is its default is a trap rather than a parameter. It is fixed at four and folded into the size, which is what that label always said it included. The check stays as a guard, because a link bookmarked before the change still carries whatever was set.",
+            "The maze's loops control is three answers — none, some, many — instead of twenty-one steps. Nobody has an opinion about 0.35 of the dead ends versus 0.40, and the tool's own wording always treated it as a kind of maze rather than a quantity. Old links keep their maze: the stored value is still the fraction."
+        ]
+    },
+    {
         version: "3.20.0",
         date: "2026-08-08",
         title: "A generated knot ring, and leaves you can see",

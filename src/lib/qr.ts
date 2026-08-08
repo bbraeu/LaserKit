@@ -178,6 +178,12 @@ export const buildQr = (opt: QrOptions): QrResult => {
             + "a square and the code stops scanning — make it bigger, or carry less in it."
         );
     }
+    // No longer reachable from the panel — the quiet border is fixed at the four
+    // modules the specification asks for, because a control whose only correct
+    // value is its default is a trap rather than a parameter. Kept as a guard,
+    // because a link somebody bookmarked before that change still carries
+    // whatever they had set, and a code that will not scan should say so rather
+    // than look fine.
     if (quiet < 4) {
         warnings.push(
             `The spec asks for a quiet border of four modules and this has ${quiet}. Readers do fail without it, `

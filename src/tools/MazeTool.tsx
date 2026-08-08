@@ -76,6 +76,42 @@ const PRESETS: Preset<MazeParams>[] = [
     }
 ];
 
+/**
+ * How much of the maze is braided, as three answers rather than twenty-one.
+ *
+ * This was a 0–1 slider in steps of 0.05, and nobody has an opinion about 0.35
+ * of the dead ends versus 0.40. The tool's own copy treats it as a *kind* of
+ * maze rather than a quantity — "at 0 there is exactly one route, which is what
+ * everybody means by a maze" — and a slider whose stops are indistinguishable is
+ * a slider asking a question the user cannot answer.
+ *
+ * The stored parameter is still the fraction, so an old link keeps its maze and
+ * the builder is untouched; only the way it is asked has changed.
+ */
+const LOOPS = [
+    {
+        id: "none",
+        label: "None",
+        hint: "Exactly one route between any two points, which is what everybody means by a maze."
+    },
+    {
+        id: "some",
+        label: "Some",
+        hint: "A third of the dead ends opened into loops. It looks harder and solves easier: you can no longer rule a corridor out by having been down it."
+    },
+    {
+        id: "many",
+        label: "Many",
+        hint: "Most dead ends opened. Barely a puzzle any more — this is the setting for a maze that is really a pattern."
+    }
+];
+
+const LOOP_VALUE: Record<string, number> = { none: 0, some: 0.35, many: 0.8 };
+
+/** Which of the three a stored fraction belongs to. */
+const nearestLoops = (braid: number): string =>
+    braid <= 0.02 ? "none" : braid < 0.6 ? "some" : "many";
+
 export default function MazeTool() {
     const params = useHistoryParams<MazeParams>(DEFAULTS, { storageKey: "laserkit:params:maze" });
     const p = params.value;
@@ -224,15 +260,12 @@ export default function MazeTool() {
                     choices={ENDS}
                     onChange={(v: MazeEnds) => params.set({ ends: v }, { label: "Way in and out" })}
                 />
-                <SliderField
+                <SegmentedField
                     label="Loops"
-                    hint="How many dead ends to open up. At 0 there is exactly one route between any two points, which is what everybody means by a maze. Above it the maze grows loops: it looks harder, and it solves easier, because you can no longer rule a corridor out by having been down it."
-                    value={p.braid}
-                    min={0}
-                    max={1}
-                    step={0.05}
-                    unit=""
-                    onChange={n => params.set({ braid: n }, { label: "Loops", coalesce: "braid" })}
+                    hint={LOOPS.find(o => o.id === nearestLoops(p.braid))!.hint}
+                    value={nearestLoops(p.braid)}
+                    choices={LOOPS}
+                    onChange={(v: string) => params.set({ braid: LOOP_VALUE[v] ?? 0 }, { label: "Loops" })}
                 />
                 <Field
                     label="Seed"

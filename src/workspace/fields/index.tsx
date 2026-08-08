@@ -66,8 +66,32 @@ export function Field({ label, hint, htmlFor, control, className, children }: {
 }
 
 /** Label, number box and slider — the workhorse of every tool's inspector. */
+/**
+ * Digits after the point a step of this size can actually reach.
+ *
+ * Radix hands back `min + n·step` in floating point, so a step of 0.01 lands on
+ * 0.15000000000000002 and the number box beside the slider shows it. Rounding
+ * to the step's own precision is the whole fix, and it belongs here rather than
+ * in each of the fourteen tools that would otherwise have to remember.
+ */
+const decimalsOf = (step: number): number => (String(step).split(".")[1] ?? "").length;
+
+/**
+ * A measurement: a slider, the same number as a box you can type in, and a unit.
+ *
+ * The one row nearly every tool in the kit is built out of, which is why it is
+ * worth being exact about what a screen reader hears.
+ *
+ * The slider's **name** is the parameter and never changes — "Kerf", not
+ * "Kerf, 0.15 mm". A name that moves while you drag is a different control every
+ * frame. The *value* goes in `aria-valuetext`, which is the attribute ARIA
+ * provides for exactly this: the number, humanised, with its unit. (A previous
+ * attempt put the value in the name; besides being wrong, it broke the promise
+ * for every unitless control, where "Across, 14" is the bare number the whole
+ * idea was meant to abolish. Hence `valueText`.)
+ */
 export function SliderField({
-    label, hint, value, onChange, min, max, step = 0.5, unit = "mm", disabled, commitKey
+    label, hint, value, onChange, min, max, step = 0.5, unit = "mm", disabled, commitKey, valueText
 }: {
     label: ReactNode;
     hint?: ReactNode;
@@ -76,12 +100,25 @@ export function SliderField({
     min: number;
     max: number;
     step?: number;
+    /** shown beside the number box; `""` for a count */
     unit?: string;
     disabled?: boolean;
     /** identifies the drag for undo coalescing; defaults to the label */
     commitKey?: string;
+    /**
+     * What the value is *called* out loud, when the unit alone will not do.
+     *
+     * A count has `unit=""`, so without this a reader announces "Across, 14" and
+     * the listener has no idea 14 of what. Mirrors `Choice.srLabel`, which
+     * exists for the same reason on a segmented control.
+     */
+    valueText?: (value: number) => string;
 }) {
-    const name = typeof label === "string" ? label : String(commitKey ?? "value");
+    const name = typeof label === "string" ? label : String(commitKey ?? "value"),
+        digits = decimalsOf(step),
+        spoken = valueText
+            ? valueText(value)
+            : `${value.toFixed(digits)}${unit ? ` ${unit}` : ""}`;
     return (
         <Field
             label={label}
@@ -102,6 +139,7 @@ export function SliderField({
         >
             <Slider
                 aria-label={name}
+                aria-valuetext={spoken}
                 min={min}
                 max={max}
                 step={step}
@@ -109,7 +147,7 @@ export function SliderField({
                 // A value typed past the slider's end must not push the thumb off
                 // the track; the field itself keeps the real number.
                 value={[Math.min(max, Math.max(min, value))]}
-                onValueChange={a => onChange(a[0]!)}
+                onValueChange={a => onChange(Number(a[0]!.toFixed(digits)))}
             />
         </Field>
     );
